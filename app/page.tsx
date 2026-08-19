@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { teacherCatalog, type TeacherAssignment } from "./teacher-catalog";
 
 type Answers = Record<string, string | string[]>;
 
@@ -21,7 +22,32 @@ const scale = [
   ["😣", "No, para nada"],
 ];
 
-const teachers = [
+const teacherScale = [
+  ["1", "Excelente"], ["2", "Muy bueno"], ["3", "Bueno"], ["4", "Regular"],
+  ["5", "Malo"], ["6", "Muy malo"], ["7", "Pésimo"],
+];
+
+const teacherQuestions = [
+  { id: "q01", dimension: "Cumplimiento profesional", text: "El maestro asiste a todas sus clases." },
+  { id: "q02", dimension: "Cumplimiento profesional", text: "El maestro empieza y termina la clase a tiempo." },
+  { id: "q03", dimension: "Planeación y evaluación", text: "Explica claramente las reglas de la clase y cómo va a calificar." },
+  { id: "q04", dimension: "Dominio y claridad", text: "Conoce bien los temas de la materia." },
+  { id: "q05", dimension: "Dominio y claridad", text: "Explica los temas de forma clara y fácil de entender." },
+  { id: "q06", dimension: "Acompañamiento", text: "Responde nuestras preguntas y aclara nuestras dudas." },
+  { id: "q07", dimension: "Participación y aprendizaje", text: "Motiva a los estudiantes a participar en clase." },
+  { id: "q08", dimension: "Participación y aprendizaje", text: "Relaciona los temas con situaciones de la vida diaria." },
+  { id: "q09", dimension: "Participación y aprendizaje", text: "Organiza actividades para trabajar en equipo." },
+  { id: "q10", dimension: "Recursos didácticos", text: "Utiliza recursos y tecnología que ayudan a aprender." },
+  { id: "q11", dimension: "Convivencia y respeto", text: "Trata a los estudiantes con respeto." },
+  { id: "q12", dimension: "Convivencia y respeto", text: "Crea un ambiente de confianza, inclusión y respeto." },
+  { id: "q13", dimension: "Estrategias didácticas", text: "Hace que sus clases sean dinámicas e interesantes." },
+  { id: "q14", dimension: "Planeación y evaluación", text: "Califica de forma clara y de acuerdo con lo que explicó." },
+  { id: "q15", dimension: "Valoración global", text: "En general, ¿cómo calificas el trabajo del maestro?" },
+];
+
+const teacherDimensions = [...new Set(teacherQuestions.map((question) => question.dimension))];
+
+const exampleTeachers = [
   { code: "matematicas", initials: "AM", name: "Mtra. Andrea Martínez", subject: "Matemáticas" },
   { code: "espanol", initials: "CR", name: "Mtro. Carlos Ramírez", subject: "Español" },
   { code: "ciencias", initials: "LG", name: "Mtra. Laura García", subject: "Ciencias" },
@@ -30,6 +56,44 @@ const teachers = [
   { code: "tecnologia", initials: "RM", name: "Mtro. Ricardo Morales", subject: "Tecnología" },
   { code: "artes", initials: "DV", name: "Mtra. Diana Vázquez", subject: "Artes" },
 ];
+
+const catalogGrades = [...new Set(teacherCatalog.map((teacher) => teacher.grade))];
+const matrixGeneralLabel = "Resultado general · todos los docentes";
+const resultTabs = [
+  { id: "overview", icon: "◫", label: "Resumen", description: "Panorama general y prioridades" },
+  { id: "teachers", icon: "◎", label: "Docentes", description: "Comparativo y detalle individual" },
+  { id: "matrix", icon: "▦", label: "Matriz", description: "Resultados por reactivo y dimensión" },
+  { id: "support", icon: "◇", label: "Dirección y apoyo", description: "Experiencia con servicios y directivos" },
+  { id: "comments", icon: "◌", label: "Voz del alumnado", description: "Temas, propuestas y comentarios" },
+  { id: "report", icon: "▤", label: "Reporte", description: "Hallazgos y plan de acción" },
+] as const;
+const catalogGroupsForGrade = (grade: string) => [...new Set(teacherCatalog.filter((teacher) => teacher.grade === grade).map((teacher) => teacher.group))];
+const hashText = (value: string) => [...value].reduce((total, character) => (total * 31 + character.charCodeAt(0)) >>> 0, 7);
+const buildTeacherAnalysis = (teacher: TeacherAssignment) => {
+  const seed = hashText(`${teacher.name}-${teacher.subject}`);
+  const score = Number((3.7 + (seed % 10) / 10).toFixed(1));
+  const positive = Math.min(94, 72 + (seed % 23));
+  const indicators = [0, 1, 2, 3].map((offset) => Math.min(97, Math.max(65, positive + ((seed >> (offset * 3)) % 11) - 5)));
+  const strengths = ["Claridad al explicar", "Trato respetuoso", "Dominio de la materia", "Participación en clase", "Aplicación práctica"];
+  const opportunities = ["Diversificar actividades", "Retroalimentación más frecuente", "Confianza para preguntar", "Ritmo de explicación", "Criterios de evaluación"];
+  return {
+    ...teacher,
+    score,
+    positive,
+    responses: 22 + (seed % 8),
+    trend: `${seed % 5 === 0 ? "-" : "+"}${1 + (seed % 6)}%`,
+    strength: strengths[seed % strengths.length],
+    opportunity: opportunities[(seed + 2) % opportunities.length],
+    priority: positive >= 86 ? "Fortaleza" : positive >= 78 ? "Seguimiento" : "Mejora",
+    indicators,
+    recommendation: `Conservar las prácticas que facilitan el aprendizaje en ${teacher.subject} y acordar una mejora observable con seguimiento durante el siguiente periodo.`,
+    comments: [
+      { category: "Reconocimiento", text: `Las explicaciones y actividades de ${teacher.subject} ayudan a comprender los temas.` },
+      { category: "Sugerencia", text: "Sería útil contar con más ejemplos y retroalimentación durante las actividades." },
+      { category: "Experiencia de aula", text: "El ambiente de la clase permite participar y expresar dudas." },
+    ],
+  };
+};
 
 const teacherAnalysis = [
   { name: "Mtra. Andrea Martínez", subject: "Matemáticas", score: 4.6, positive: 91, responses: 28, trend: "+6%", strength: "Claridad al explicar", opportunity: "Diversificar actividades", priority: "Fortaleza", indicators: [94, 96, 88, 86], recommendation: "Conservar la secuencia de explicación y sumar una actividad práctica o visual por tema para atender distintos estilos de aprendizaje.", comments: [{ category: "Reconocimiento", text: "Explica de distintas maneras hasta que todos entendemos." }, { category: "Sugerencia", text: "Me ayudaría practicar con ejemplos de situaciones reales." }, { category: "Experiencia de aula", text: "Puedo preguntar sin sentir que voy atrasando al grupo." }] },
@@ -71,17 +135,22 @@ function ScaleQuestion({
   text,
   answers,
   setAnswer,
+  options = scale,
+  dimension,
 }: {
   id: string;
   text: string;
   answers: Answers;
   setAnswer: (id: string, value: string) => void;
+  options?: string[][];
+  dimension?: string;
 }) {
   return (
     <div className="question-block">
+      {dimension && <span className="question-dimension">{dimension}</span>}
       <h3>{text}</h3>
-      <div className="scale-grid">
-        {scale.map(([emoji, label]) => (
+      <div className={`scale-grid ${options === teacherScale ? "teacher-scale-grid" : ""}`}>
+        {options.map(([emoji, label]) => (
           <Choice
             key={label}
             emoji={emoji}
@@ -102,17 +171,29 @@ export default function Home() {
   const [answers, setAnswers] = useState<Answers>({});
   const [saved, setSaved] = useState(false);
   const [teacherIndex, setTeacherIndex] = useState(0);
+  const [expandedTeacherQuestion, setExpandedTeacherQuestion] = useState<string | null>(null);
   const [authorized, setAuthorized] = useState(false);
   const [login, setLogin] = useState({ user: "", password: "" });
   const [loginError, setLoginError] = useState("");
-  const [dashboardTab, setDashboardTab] = useState<"overview" | "teachers" | "comments" | "report">("overview");
+  const [dashboardTab, setDashboardTab] = useState<"overview" | "teachers" | "matrix" | "support" | "comments" | "report">("overview");
+  const [voiceDetailOpen, setVoiceDetailOpen] = useState(false);
   const [filters, setFilters] = useState({ cycle: "2026–2027", grade: "Todos los grados", group: "Todos los grupos", area: "Todas las áreas" });
   const [selectedAnalysisTeacher, setSelectedAnalysisTeacher] = useState(0);
+  const [analysisTeacherSearch, setAnalysisTeacherSearch] = useState("");
+  const [analysisTeacherOpen, setAnalysisTeacherOpen] = useState(false);
+  const [analysisTeacherOffset, setAnalysisTeacherOffset] = useState(0);
+  const [selectedSupportArea, setSelectedSupportArea] = useState(0);
   const [commentsExpanded, setCommentsExpanded] = useState(false);
+  const [matrixDetailOpen, setMatrixDetailOpen] = useState(false);
+  const [matrixExportOpen, setMatrixExportOpen] = useState(false);
+  const [matrixExportTeacher, setMatrixExportTeacher] = useState("general");
+  const [matrixTeacherSearch, setMatrixTeacherSearch] = useState(matrixGeneralLabel);
+  const [matrixTeacherOpen, setMatrixTeacherOpen] = useState(false);
   const [actionStatuses, setActionStatuses] = useState<Record<string, string>>({});
   const [studentUniverse, setStudentUniverse] = useState(96);
   const [responseCount, setResponseCount] = useState(84);
   const [exporting, setExporting] = useState<"excel" | "pdf" | "teacher-pdf" | "voice-pdf" | "channel-pdf" | null>(null);
+  const [matrixExporting, setMatrixExporting] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -156,6 +237,11 @@ export default function Home() {
 
   const setAnswer = (id: string, value: string | string[]) =>
     setAnswers((current) => ({ ...current, [id]: value }));
+  const openTeacher = (index: number) => {
+    setTeacherIndex(index);
+    setExpandedTeacherQuestion(null);
+    requestAnimationFrame(() => document.querySelector(".teacher-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
 
   const progress = Math.round((level / (levels.length - 1)) * 100);
   const answeredCount = Object.values(answers).filter((value) => Array.isArray(value) ? value.length > 0 : Boolean(value)).length;
@@ -179,7 +265,53 @@ export default function Home() {
   };
 
   const updateFilter = (key: keyof typeof filters, value: string) => setFilters((current) => ({ ...current, [key]: value }));
+  const selectedStudentGrade = String(answers.grade || "");
+  const selectedStudentGroup = String(answers.group || "");
+  const studentGroupOptions = selectedStudentGrade ? catalogGroupsForGrade(selectedStudentGrade) : [];
+  const studentTeachers = teacherCatalog.filter((teacher) => teacher.grade === selectedStudentGrade && teacher.group === selectedStudentGroup);
+  const resultGroupOptions = filters.grade === "Todos los grados"
+    ? [...new Set(teacherCatalog.map((teacher) => teacher.group))]
+    : catalogGroupsForGrade(filters.grade);
+  const resultTeacherAssignments = teacherCatalog.filter((teacher) =>
+    (filters.grade === "Todos los grados" || teacher.grade === filters.grade)
+    && (filters.group === "Todos los grupos" || teacher.group === filters.group),
+  );
+  const resultTeachers = [...new Map(resultTeacherAssignments.map((teacher) => [`${teacher.name}|${teacher.subject}`, teacher])).values()];
+  const matrixTeacherNames = [...new Set(teacherCatalog.map((teacher) => teacher.name))].sort((a, b) => a.localeCompare(b, "es"));
+  const selectedMatrixLabel = matrixExportTeacher === "general" ? matrixGeneralLabel : matrixExportTeacher;
+  const matrixTeacherQuery = matrixTeacherSearch === selectedMatrixLabel ? "" : matrixTeacherSearch.trim().toLocaleLowerCase("es-MX");
+  const visibleMatrixTeacherNames = matrixTeacherNames.filter((name) => name.toLocaleLowerCase("es-MX").includes(matrixTeacherQuery));
+  const selectedMatrixAssignments = matrixExportTeacher === "general"
+    ? teacherCatalog
+    : teacherCatalog.filter((teacher) => teacher.name === matrixExportTeacher);
+  const matrixGradeOptions = [...new Set(selectedMatrixAssignments.map((teacher) => teacher.grade))];
+  const matrixGroupOptions = [...new Set(selectedMatrixAssignments
+    .filter((teacher) => filters.grade === "Todos los grados" || teacher.grade === filters.grade)
+    .map((teacher) => teacher.group))];
+  const selectedMatrixSubjects = [...new Set(selectedMatrixAssignments.map((teacher) => teacher.subject))];
+  const chooseMatrixTeacher = (teacherName: string) => {
+    setMatrixExportTeacher(teacherName);
+    setMatrixTeacherSearch(teacherName === "general" ? matrixGeneralLabel : teacherName);
+    setMatrixTeacherOpen(false);
+    setFilters((current) => ({ ...current, grade: "Todos los grados", group: "Todos los grupos" }));
+  };
+  const updateMatrixTeacherSearch = (value: string) => {
+    setMatrixTeacherSearch(value);
+    setMatrixTeacherOpen(true);
+    if (value === matrixGeneralLabel) chooseMatrixTeacher("general");
+    else {
+      const exactTeacher = matrixTeacherNames.find((name) => name.toLocaleLowerCase("es-MX") === value.toLocaleLowerCase("es-MX"));
+      if (exactTeacher) chooseMatrixTeacher(exactTeacher);
+    }
+  };
+
+  useEffect(() => {
+    setSelectedAnalysisTeacher(0);
+    setAnalysisTeacherSearch("");
+    setAnalysisTeacherOffset(Math.floor(Math.random() * Math.max(1, resultTeachers.length)));
+  }, [filters.grade, filters.group]);
   const scopeLabel = [filters.cycle, filters.grade, filters.group, filters.area].join(" · ");
+  const activeResultTab = resultTabs.find((tab) => tab.id === dashboardTab) ?? resultTabs[0];
   const cycleAdjustment = filters.cycle === "2025–2026" ? -2 : 0;
   const areaAdjustment = filters.area === "Psicología" ? 2 : filters.area === "Enfermería" ? -1 : filters.area === "Tutoría" || filters.area === "Docentes" ? 1 : 0;
   const scopeAdjustment = cycleAdjustment + areaAdjustment + (filters.grade === "Todos los grados" ? 0 : filters.grade.includes("preparatoria") ? 2 : -1) + (filters.group === "Grupo B" ? -3 : filters.group === "Grupo C" ? 2 : 0);
@@ -191,13 +323,66 @@ export default function Home() {
   const scopedResponseRate = Math.max(0, Math.min(1, baseResponseRate + cycleAdjustment / 100));
   const scopedResponseCount = Math.min(scopedUniverse, Math.round(scopedUniverse * scopedResponseRate));
   const positiveExperience = Math.max(60, 84 + scopeAdjustment);
-  const scopedTeacherAnalysis = teacherAnalysis.map((item) => ({
+  const scopedTeacherAnalysis = resultTeachers.map(buildTeacherAnalysis).map((item) => ({
     ...item,
     score: Math.max(1, Math.min(5, Number((item.score + scopeAdjustment / 20).toFixed(1)))),
     positive: Math.max(0, Math.min(100, item.positive + scopeAdjustment)),
     responses: Math.max(1, Math.min(scopedResponseCount, Math.round(item.responses * gradeFactor * groupFactor))),
     indicators: item.indicators.map((value) => Math.max(0, Math.min(100, value + scopeAdjustment))),
   }));
+  const analysisTeacherMatches = scopedTeacherAnalysis
+    .map((teacher, index) => ({ teacher, index }))
+    .filter(({ teacher }) => teacher.name.toLocaleLowerCase("es-MX").includes(analysisTeacherSearch.trim().toLocaleLowerCase("es-MX")));
+  const rotatedAnalysisTeachers = scopedTeacherAnalysis.map((teacher, step) => {
+    const index = (analysisTeacherOffset + step) % scopedTeacherAnalysis.length;
+    return { teacher: scopedTeacherAnalysis[index], index };
+  });
+  const preliminaryAnalysisTeachers = analysisTeacherSearch.trim()
+    ? analysisTeacherMatches.slice(0, 5)
+    : [{ teacher: scopedTeacherAnalysis[selectedAnalysisTeacher], index: selectedAnalysisTeacher }, ...rotatedAnalysisTeachers.filter(({ index }) => index !== selectedAnalysisTeacher)].filter(({ teacher }) => Boolean(teacher)).slice(0, 5);
+  const teacherMatrix = teacherQuestions.map((question, questionIndex) => {
+    const responseBase = Math.max(1, Math.min(scopedResponseCount, Math.round(scopedResponseCount * (0.94 + (questionIndex % 4) * 0.01))));
+    const average = Number(Math.max(1, Math.min(7, 1.55 + questionIndex * 0.075 - scopeAdjustment / 35)).toFixed(2));
+    const performanceIndex = Math.round(((7 - average) / 6) * 100);
+    const favorable = Math.max(0, Math.min(responseBase, Math.round(responseBase * (performanceIndex / 100 + 0.08))));
+    const critical = Math.max(0, Math.min(responseBase - favorable, Math.round(responseBase * Math.max(0.02, (100 - performanceIndex) / 250))));
+    return { ...question, responses: responseBase, average, performanceIndex, favorable, critical, level: performanceIndex >= 75 ? "Fortaleza" : performanceIndex >= 50 ? "Atención" : "Área prioritaria" };
+  });
+  const dimensionMatrix = teacherDimensions.map((dimension) => {
+    const rows = teacherMatrix.filter((row) => row.dimension === dimension);
+    const average = Number((rows.reduce((total, row) => total + row.average, 0) / rows.length).toFixed(2));
+    const performanceIndex = Math.round(rows.reduce((total, row) => total + row.performanceIndex, 0) / rows.length);
+    return { dimension, questions: rows.length, average, performanceIndex, level: performanceIndex >= 75 ? "Fortaleza" : performanceIndex >= 50 ? "Atención" : "Área prioritaria" };
+  });
+  const supportAreaAnalysis = [
+    { area: "Dirección y coordinación", icon: "🧭", accent: "purple", questions: [
+      { label: "Organización y cumplimiento", text: "Cumple los acuerdos y organiza bien las actividades de la escuela.", positive: 82 },
+      { label: "Comunicación", text: "Explica con claridad las decisiones, reglas y cambios importantes.", positive: 77 },
+      { label: "Escucha estudiantil", text: "Escucha a los estudiantes y toma en cuenta lo que pensamos.", positive: 75 },
+      { label: "Respeto y trato justo", text: "Nos trata con respeto y busca soluciones justas.", positive: 81 },
+      { label: "Seguimiento", text: "Da seguimiento a los problemas hasta que se resuelven.", positive: 74 },
+    ]},
+    { area: "Psicología", icon: "🧠", accent: "gold", questions: [
+      { label: "Escucha", text: "Me escuchó con atención y sin juzgarme.", positive: 89 },
+      { label: "Confianza", text: "Me hizo sentir en confianza para hablar de lo que me preocupaba.", positive: 87 },
+      { label: "Orientación útil", text: "Su orientación me ayudó a saber qué podía hacer después.", positive: 84 },
+    ]},
+    { area: "Enfermería", icon: "🩺", accent: "cyan", questions: [
+      { label: "Atención", text: "Me atendió con amabilidad y tomó en serio lo que sentía.", positive: 91 },
+      { label: "Indicaciones claras", text: "Me explicó claramente qué debía hacer.", positive: 87 },
+      { label: "Seguimiento", text: "Me indicó cuándo debía regresar o pedir más ayuda.", positive: 83 },
+    ]},
+    { area: "Tutoría", icon: "🤝", accent: "blue", questions: [
+      { label: "Escucha", text: "Me escucha cuando tengo una dificultad.", positive: 86 },
+      { label: "Orientación", text: "Me ayuda a encontrar una solución o el apoyo que necesito.", positive: 82 },
+      { label: "Interés integral", text: "Se interesa por cómo estamos, no solo por las calificaciones.", positive: 83 },
+    ]},
+  ].map((area) => {
+    const questions = area.questions.map((question) => ({ ...question, positive: Math.max(0, Math.min(100, question.positive + scopeAdjustment)) }));
+    return { ...area, questions, average: Math.round(questions.reduce((total, question) => total + question.positive, 0) / questions.length) };
+  });
+  const visibleSupportAreas = filters.area === "Todas las áreas" || filters.area === "Docentes" ? supportAreaAnalysis : supportAreaAnalysis.filter((area) => area.area === filters.area);
+  const focusedSupportArea = visibleSupportAreas[selectedSupportArea] ?? visibleSupportAreas[0] ?? supportAreaAnalysis[0];
   const focusedTeacher = scopedTeacherAnalysis[selectedAnalysisTeacher] ?? scopedTeacherAnalysis[0];
   const participationRate = scopedUniverse > 0 ? Math.min(100, Math.round((scopedResponseCount / scopedUniverse) * 100)) : 0;
   const analysisReady = participationRate > 50 && scopedResponseCount >= 10;
@@ -280,6 +465,209 @@ export default function Home() {
     ] : reportPlan,
   };
 
+  const exportTeacherEvaluationWorkbook = async () => {
+    setMatrixExporting(true);
+    try {
+      const XLSX = await import("xlsx");
+      const templateResponse = await fetch("/IMMA_Teens_Voice_Evaluacion_Docente_Plantilla.xlsx");
+      if (!templateResponse.ok) throw new Error("No fue posible cargar la plantilla de evaluación docente.");
+      const workbook = XLSX.read(await templateResponse.arrayBuffer(), { type: "array", cellStyles: true, cellFormula: true });
+      const captureSheet = workbook.Sheets["Captura"];
+      const matrixSheet = workbook.Sheets["Matriz evaluación"];
+      const dashboardSheet = workbook.Sheets["Dashboard"];
+      if (!captureSheet || !matrixSheet || !dashboardSheet) throw new Error("La plantilla no contiene las hojas esperadas.");
+
+      const chosenTeachers = matrixExportTeacher === "general"
+        ? scopedTeacherAnalysis
+        : scopedTeacherAnalysis.filter((teacher) => teacher.name === matrixExportTeacher);
+      const scoreLabel = ["", "Excelente", "Muy bueno", "Bueno", "Regular", "Malo", "Muy malo", "Pésimo"];
+      const today = new Date().toISOString().slice(0, 10);
+      const captureRows: (string | number)[][] = [];
+      chosenTeachers.forEach((teacher, teacherPosition) => {
+        const evaluationCount = Math.max(1, teacher.responses);
+        teacherQuestions.forEach((question, questionIndex) => {
+          const indicatorBase = teacher.indicators[questionIndex % teacher.indicators.length] ?? teacher.positive;
+          const targetMean = Math.max(1, Math.min(7, 1 + (100 - indicatorBase) / 18));
+          for (let responseIndex = 0; responseIndex < evaluationCount; responseIndex += 1) {
+            const variation = ((responseIndex * 3 + questionIndex * 2 + teacherPosition) % 7) - 3;
+            const score = Math.max(1, Math.min(7, Math.round(targetMean + variation * 0.18)));
+            const evaluationId = `${teacher.subject.slice(0, 3).toUpperCase()}-${String(responseIndex + 1).padStart(3, "0")}`;
+            const comment = question.id === "q15" ? teacher.comments[responseIndex % teacher.comments.length]?.text ?? "" : "";
+            captureRows.push([evaluationId, today, teacher.name, teacher.subject, filters.group === "Todos los grupos" ? "General" : filters.group, question.id.toUpperCase(), question.dimension, score, scoreLabel[score], comment]);
+          }
+        });
+      });
+
+      const oldEndRow = 505;
+      for (let row = 6; row <= oldEndRow; row += 1) {
+        for (let col = 0; col < 10; col += 1) delete captureSheet[XLSX.utils.encode_cell({ r: row - 1, c: col })];
+      }
+      XLSX.utils.sheet_add_aoa(captureSheet, captureRows, { origin: "A6" });
+      const lastRow = Math.max(6, 5 + captureRows.length);
+      captureSheet["!ref"] = `A1:J${lastRow}`;
+      captureSheet["!autofilter"] = { ref: `A5:J${lastRow}` };
+
+      const updateFormulaRange = (sheet: Record<string, any>) => {
+        Object.keys(sheet).forEach((address) => {
+          const cell = sheet[address];
+          if (address[0] !== "!" && cell?.f) cell.f = cell.f.replaceAll("$505", `$${lastRow}`);
+        });
+      };
+      updateFormulaRange(matrixSheet);
+      updateFormulaRange(dashboardSheet);
+
+      const byQuestion = new Map<string, number[]>();
+      captureRows.forEach((row) => { const key = String(row[5]); const values = byQuestion.get(key) ?? []; values.push(Number(row[7])); byQuestion.set(key, values); });
+      teacherQuestions.forEach((question, index) => {
+        const excelRow = 6 + index;
+        const values = byQuestion.get(question.id.toUpperCase()) ?? [];
+        const mean = values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0;
+        const favorable = values.filter((value) => value <= 3).length;
+        const critical = values.filter((value) => value >= 5).length;
+        const level = !values.length ? "Sin datos" : scoreLabel[Math.max(1, Math.min(7, Math.round(mean)))];
+        matrixSheet[`D${excelRow}`].v = values.length;
+        matrixSheet[`E${excelRow}`].v = values.length ? mean : "";
+        matrixSheet[`F${excelRow}`].v = values.length ? (7 - mean) / 6 : "";
+        matrixSheet[`G${excelRow}`].v = level;
+        matrixSheet[`H${excelRow}`].v = favorable;
+        matrixSheet[`I${excelRow}`].v = critical;
+      });
+      const allScores = captureRows.map((row) => Number(row[7]));
+      const overallMean = allScores.length ? allScores.reduce((total, value) => total + value, 0) / allScores.length : 0;
+      dashboardSheet.A5.v = allScores.length;
+      dashboardSheet.D5.v = overallMean || "";
+      dashboardSheet.G5.v = allScores.length ? (7 - overallMean) / 6 : "";
+      dashboardSheet.J5.v = allScores.length ? scoreLabel[Math.round(overallMean)] : "Sin datos";
+
+      const palette = {
+        navy: "18246B",
+        slate: "44506A",
+        pale: "F5F7FB",
+        soft: "E9EDF5",
+        line: "D8DEE9",
+        ink: "17223D",
+        muted: "667085",
+        white: "FFFFFF",
+      };
+      const borderBottom = { bottom: { style: "thin", color: { rgb: palette.line } } };
+      const styleCell = (sheet: Record<string, any>, address: string, style: Record<string, any>) => {
+        const cell = sheet[address];
+        if (!cell) return;
+        cell.s = { ...(cell.s ?? {}), ...style };
+      };
+      const styleRange = (sheet: Record<string, any>, range: string, style: Record<string, any>) => {
+        const decoded = XLSX.utils.decode_range(range);
+        for (let row = decoded.s.r; row <= decoded.e.r; row += 1) {
+          for (let col = decoded.s.c; col <= decoded.e.c; col += 1) {
+            styleCell(sheet, XLSX.utils.encode_cell({ r: row, c: col }), style);
+          }
+        }
+      };
+      const styleStripedRows = (sheet: Record<string, any>, startRow: number, endRow: number, endColumn: string) => {
+        for (let row = startRow; row <= endRow; row += 1) {
+          styleRange(sheet, `A${row}:${endColumn}${row}`, {
+            fill: { patternType: "solid", fgColor: { rgb: row % 2 === 0 ? palette.pale : palette.white } },
+            font: { name: "Aptos", sz: 10, color: { rgb: palette.ink } },
+            border: borderBottom,
+            alignment: { vertical: "center", wrapText: true },
+          });
+        }
+      };
+      const titleStyle = {
+        fill: { patternType: "solid", fgColor: { rgb: palette.navy } },
+        font: { name: "Aptos Display", sz: 16, bold: true, color: { rgb: palette.white } },
+        alignment: { vertical: "center" },
+      };
+      const headerStyle = {
+        fill: { patternType: "solid", fgColor: { rgb: palette.navy } },
+        font: { name: "Aptos", sz: 10, bold: true, color: { rgb: palette.white } },
+        alignment: { horizontal: "center", vertical: "center", wrapText: true },
+      };
+
+      const questionnaireSheet = workbook.Sheets["Cuestionario"];
+      if (questionnaireSheet) {
+        styleRange(questionnaireSheet, "A1:J1", titleStyle);
+        styleRange(questionnaireSheet, "A9:J9", {
+          fill: { patternType: "solid", fgColor: { rgb: palette.soft } },
+          font: { name: "Aptos", sz: 10, color: { rgb: palette.muted } },
+          alignment: { vertical: "center", wrapText: true },
+        });
+        styleRange(questionnaireSheet, "A11:J11", headerStyle);
+        styleStripedRows(questionnaireSheet, 12, 26, "J");
+        questionnaireSheet["!cols"] = [10, 25, 54, 13, 13, 13, 13, 13, 13, 13].map((wch) => ({ wch }));
+        questionnaireSheet["!rows"] = questionnaireSheet["!rows"] ?? [];
+        questionnaireSheet["!rows"][0] = { hpt: 28 };
+        questionnaireSheet["!rows"][10] = { hpt: 34 };
+      }
+
+      styleRange(captureSheet, "A1:J1", titleStyle);
+      styleRange(captureSheet, "A3:J3", {
+        fill: { patternType: "solid", fgColor: { rgb: palette.soft } },
+        font: { name: "Aptos", sz: 10, color: { rgb: palette.muted } },
+        alignment: { vertical: "center", wrapText: true },
+      });
+      styleRange(captureSheet, "A5:J5", headerStyle);
+      styleStripedRows(captureSheet, 6, lastRow, "J");
+      captureSheet["!cols"] = [17, 13, 26, 20, 15, 12, 28, 12, 16, 44].map((wch) => ({ wch }));
+      captureSheet["!rows"] = captureSheet["!rows"] ?? [];
+      captureSheet["!rows"][0] = { hpt: 28 };
+      captureSheet["!rows"][4] = { hpt: 34 };
+      for (let row = 6; row <= lastRow; row += 1) {
+        styleCell(captureSheet, `H${row}`, { alignment: { horizontal: "center", vertical: "center" }, numFmt: "0" });
+      }
+
+      styleRange(matrixSheet, "A1:M1", titleStyle);
+      styleRange(matrixSheet, "A4:I4", {
+        fill: { patternType: "solid", fgColor: { rgb: palette.soft } },
+        font: { name: "Aptos", sz: 11, bold: true, color: { rgb: palette.ink } },
+        alignment: { vertical: "center" },
+      });
+      styleRange(matrixSheet, "A5:I5", headerStyle);
+      styleRange(matrixSheet, "K4:M4", {
+        fill: { patternType: "solid", fgColor: { rgb: palette.slate } },
+        font: { name: "Aptos", sz: 10, bold: true, color: { rgb: palette.white } },
+        alignment: { horizontal: "center", vertical: "center", wrapText: true },
+      });
+      styleStripedRows(matrixSheet, 6, 20, "I");
+      matrixSheet["!cols"] = [10, 26, 54, 12, 12, 14, 18, 15, 15, 3, 13, 18, 22].map((wch) => ({ wch }));
+      matrixSheet["!rows"] = matrixSheet["!rows"] ?? [];
+      matrixSheet["!rows"][0] = { hpt: 28 };
+      matrixSheet["!rows"][4] = { hpt: 34 };
+      for (let row = 6; row <= 20; row += 1) {
+        styleCell(matrixSheet, `E${row}`, { numFmt: "0.00", alignment: { horizontal: "center", vertical: "center" } });
+        styleCell(matrixSheet, `F${row}`, { numFmt: "0%", alignment: { horizontal: "center", vertical: "center" } });
+      }
+
+      styleRange(dashboardSheet, "A1:L1", titleStyle);
+      ["A4:C4", "D4:F4", "G4:I4", "J4:L4", "A9:C9", "E9:F9"].forEach((range) => styleRange(dashboardSheet, range, headerStyle));
+      ["A5:C5", "D5:F5", "G5:I5", "J5:L5"].forEach((range) => styleRange(dashboardSheet, range, {
+        fill: { patternType: "solid", fgColor: { rgb: palette.white } },
+        font: { name: "Aptos Display", sz: 16, bold: true, color: { rgb: palette.navy } },
+        border: borderBottom,
+        alignment: { horizontal: "center", vertical: "center" },
+      }));
+      styleStripedRows(dashboardSheet, 10, 24, "F");
+      dashboardSheet["!cols"] = [26, 18, 16, 3, 28, 18, 18, 18, 18, 18, 18, 18].map((wch) => ({ wch }));
+      dashboardSheet["!rows"] = dashboardSheet["!rows"] ?? [];
+      dashboardSheet["!rows"][0] = { hpt: 28 };
+      dashboardSheet["!rows"][4] = { hpt: 32 };
+
+      if (workbook.Sheets["Comparación"]) {
+        delete workbook.Sheets["Comparación"];
+        workbook.SheetNames = workbook.SheetNames.filter((sheetName) => sheetName !== "Comparación");
+      }
+      workbook.Workbook = workbook.Workbook ?? {};
+      // `CalcPr` es parte del formato XLSX pero falta en los tipos de `xlsx`.
+      (workbook.Workbook as { CalcPr?: Record<string, unknown> }).CalcPr = { calcMode: "auto", fullCalcOnLoad: true, forceFullCalc: true };
+
+      const scopeName = matrixExportTeacher === "general" ? "General" : matrixExportTeacher;
+      XLSX.writeFile(workbook, `IMMA_Evaluacion_Docente_${scopeName.replace(/\s+/g, "_")}_${filters.cycle}.xlsx`, { compression: true });
+      setMatrixExportOpen(false);
+    } finally {
+      setMatrixExporting(false);
+    }
+  };
+
   const exportExcel = async () => {
     setExporting("excel");
     try {
@@ -317,13 +705,19 @@ export default function Home() {
         { section: "Experiencia IMMA", code: "imma_safe", question: "Me siento seguro/a dentro del IMMA.", positive: 88 + scopeAdjustment },
         { section: "Experiencia IMMA", code: "imma_heard", question: "Siento que mi opinión es tomada en cuenta.", positive: 72 + scopeAdjustment },
         { section: "Experiencia IMMA", code: "imma_help", question: "Sé con quién pedir ayuda cuando la necesito.", positive: 79 + scopeAdjustment },
-        { section: "Dirección", code: "director_listens", question: "Me escucha cuando necesito hablar.", positive: 78 + scopeAdjustment },
-        { section: "Dirección", code: "director_fair", question: "Busca soluciones justas.", positive: 81 + scopeAdjustment },
-        { section: "Psicología", code: "psych_listens", question: "Me escuchó sin juzgarme.", positive: 89 + scopeAdjustment },
-        { section: "Psicología", code: "psych_useful", question: "Su apoyo me resultó útil.", positive: 84 + scopeAdjustment },
+        { section: "Dirección", code: "director_agreements", question: "Cumple los acuerdos y organiza bien las actividades de la escuela.", positive: 82 + scopeAdjustment },
+        { section: "Dirección", code: "director_communication", question: "Explica con claridad las decisiones, reglas y cambios importantes.", positive: 77 + scopeAdjustment },
+        { section: "Dirección", code: "director_listens", question: "Escucha a los estudiantes y toma en cuenta lo que pensamos.", positive: 75 + scopeAdjustment },
+        { section: "Dirección", code: "director_fair", question: "Nos trata con respeto y busca soluciones justas.", positive: 81 + scopeAdjustment },
+        { section: "Dirección", code: "director_followup", question: "Da seguimiento a los problemas hasta que se resuelven.", positive: 74 + scopeAdjustment },
+        { section: "Psicología", code: "psych_listens", question: "Me escuchó con atención y sin juzgarme.", positive: 89 + scopeAdjustment },
+        { section: "Psicología", code: "psych_safe", question: "Me hizo sentir en confianza para hablar de lo que me preocupaba.", positive: 87 + scopeAdjustment },
+        { section: "Psicología", code: "psych_useful", question: "Su orientación me ayudó a saber qué podía hacer después.", positive: 84 + scopeAdjustment },
         { section: "Enfermería", code: "nurse_care", question: "Me atendió con amabilidad y tomó en serio lo que sentía.", positive: 91 + scopeAdjustment },
         { section: "Enfermería", code: "nurse_clear", question: "Me explicó claramente qué debía hacer.", positive: 87 + scopeAdjustment },
+        { section: "Enfermería", code: "nurse_followup", question: "Me indicó cuándo debía regresar o pedir más ayuda.", positive: 83 + scopeAdjustment },
         { section: "Tutoría", code: "tutor_listens", question: "Me escucha cuando tengo una dificultad.", positive: 86 + scopeAdjustment },
+        { section: "Tutoría", code: "tutor_guidance", question: "Me ayuda a encontrar una solución o el apoyo que necesito.", positive: 82 + scopeAdjustment },
         { section: "Tutoría", code: "tutor_cares", question: "Se interesa por cómo estamos, no sólo por las calificaciones.", positive: 83 + scopeAdjustment },
       ];
       const surveyRows = surveyQuestions.map((item) => {
@@ -374,7 +768,7 @@ export default function Home() {
       addSheet("Diccionario", [
         { Campo: "Alcance", Definición: "Combinación activa de ciclo, grado, grupo y área." },
         { Campo: "Respuestas válidas", Definición: "Respuestas incluidas después de aplicar el alcance seleccionado." },
-        { Campo: "Resultado positivo", Definición: "Proporción estimada de respuestas favorables en una escala de cinco opciones." },
+        { Campo: "Resultado positivo", Definición: "Proporción estimada de respuestas favorables. Dirección y servicios usan cuatro opciones; docentes usan la escala 1–7." },
         { Campo: "Menciones", Definición: "Número de apariciones temáticas; una respuesta puede aportar más de un tema." },
         { Campo: "Reservado", Definición: "Comentario sensible canalizado sin exponer su contenido." },
         { Campo: "Prioridad", Definición: "Hallazgo que requiere responsable, acción y fecha de seguimiento." },
@@ -625,18 +1019,19 @@ export default function Home() {
           <div className="question-block">
             <h3>¿En qué grado estudias?</h3>
             <div className="compact-grid">
-              {["1.º de secundaria", "2.º de secundaria", "3.º de secundaria", "1.º de preparatoria"].map((item) => (
-                <Choice key={item} label={item} selected={answers.grade === item} onClick={() => setAnswer("grade", item)} />
+              {catalogGrades.map((item) => (
+                <Choice key={item} label={item} selected={answers.grade === item} onClick={() => { setAnswers((current) => ({ ...current, grade: item, group: "" })); setTeacherIndex(0); }} />
               ))}
             </div>
           </div>
           <div className="question-block">
             <h3>Selecciona tu grupo</h3>
             <div className="three-grid">
-              {["Grupo A", "Grupo B", "Grupo C"].map((item) => (
-                <Choice key={item} label={item} selected={answers.group === item} onClick={() => setAnswer("group", item)} />
+              {studentGroupOptions.map((item) => (
+                <Choice key={item} label={item} selected={answers.group === item} onClick={() => { setAnswer("group", item); setTeacherIndex(0); }} />
               ))}
             </div>
+            {!selectedStudentGrade && <small>Primero selecciona tu grado para ver los grupos disponibles.</small>}
           </div>
           <div className="question-block">
             <h3>Cuando llegas al IMMA, normalmente te sientes…</h3>
@@ -654,29 +1049,33 @@ export default function Home() {
     }
 
     if (level === 2) {
-      const teacher = teachers[teacherIndex];
+      const teacher = studentTeachers[teacherIndex];
+      if (!teacher) return <div className="empty-state"><strong>Selecciona tu grado y grupo</strong><p>Regresa al paso anterior para cargar las materias y docentes que te corresponden.</p></div>;
       const prefix = `teacher_${teacher.code}`;
-      const requiredFields = ["explains", "respect", "help", "fair", "confidence"];
-      const completedTeachers = teachers.filter((item) =>
+      const requiredFields = teacherQuestions.map((question) => question.id);
+      const completedTeachers = studentTeachers.filter((item) =>
         requiredFields.every((field) => Boolean(answers[`teacher_${item.code}_${field}`])),
       ).length;
       const currentCompleted = requiredFields.every((field) => Boolean(answers[`${prefix}_${field}`]));
+      const answeredTeacherQuestions = requiredFields.filter((field) => Boolean(answers[`${prefix}_${field}`])).length;
+      const firstUnansweredQuestion = teacherQuestions.find((question) => !answers[`${prefix}_${question.id}`])?.id ?? teacherQuestions[teacherQuestions.length - 1].id;
+      const activeQuestionId = expandedTeacherQuestion ?? firstUnansweredQuestion;
 
       return (
         <>
           <div className="section-heading">
             <span className="level-icon">📚</span>
-            <div><p>NIVEL 2 · {completedTeachers} DE 7 EVALUADOS</p><h2>Tus clases y docentes</h2></div>
+            <div><p>NIVEL 2 · {completedTeachers} DE {studentTeachers.length} EVALUADOS</p><h2>Tus clases y docentes</h2></div>
           </div>
           <div className="teacher-workspace">
             <aside className="teacher-checklist" aria-label="Lista de docentes">
               <div className="checklist-heading">
                 <div><strong>Checklist de docentes</strong><span>Selecciona una tarjeta para evaluarla</span></div>
-                <b>{completedTeachers}/7</b>
+                <b>{completedTeachers}/{studentTeachers.length}</b>
               </div>
-              <div className="checklist-progress"><i style={{ width: `${(completedTeachers / teachers.length) * 100}%` }} /></div>
+              <div className="checklist-progress"><i style={{ width: `${(completedTeachers / studentTeachers.length) * 100}%` }} /></div>
               <div className="teacher-list">
-                {teachers.map((item, index) => {
+                {studentTeachers.map((item, index) => {
                   const itemPrefix = `teacher_${item.code}`;
                   const isComplete = requiredFields.every((field) => Boolean(answers[`${itemPrefix}_${field}`]));
                   const hasStarted = requiredFields.some((field) => Boolean(answers[`${itemPrefix}_${field}`]));
@@ -685,7 +1084,7 @@ export default function Home() {
                       type="button"
                       key={item.code}
                       className={`teacher-list-item ${teacherIndex === index ? "active" : ""} ${isComplete ? "complete" : ""}`}
-                      onClick={() => setTeacherIndex(index)}
+                      onClick={() => openTeacher(index)}
                     >
                       <span className="mini-avatar">{item.initials}</span>
                       <span><strong>{item.name}</strong><small>{item.subject}</small></span>
@@ -701,19 +1100,34 @@ export default function Home() {
               <div className="person-card teacher-main-card">
                 <div className="avatar">{teacher.initials}</div>
                 <div className="person-copy">
-                  <span className="tag">DOCENTE {teacherIndex + 1} DE 7</span>
+                  <span className="tag">DOCENTE {teacherIndex + 1} DE {studentTeachers.length}</span>
                   <h2>{teacher.name}</h2>
                   <p>{teacher.subject} · {String(answers.grade || "1.º de secundaria")} · {String(answers.group || "Grupo A")}</p>
                 </div>
                 <span className={`card-status ${currentCompleted ? "complete-status" : ""}`}>{currentCompleted ? "Evaluado ✓" : "En evaluación"}</span>
               </div>
-              <p className="instruction">Evalúa solamente lo que tú hayas vivido en esta clase. Las respuestas se guardan por cada docente.</p>
-              <ScaleQuestion id={`${prefix}_explains`} text="Entiendo su manera de explicar." answers={answers} setAnswer={setAnswer} />
-              <ScaleQuestion id={`${prefix}_respect`} text="Me trata con respeto." answers={answers} setAnswer={setAnswer} />
-              <ScaleQuestion id={`${prefix}_help`} text="Me ayuda a mejorar y aprender." answers={answers} setAnswer={setAnswer} />
-              <ScaleQuestion id={`${prefix}_fair`} text="Califica de manera clara y justa." answers={answers} setAnswer={setAnswer} />
-              <ScaleQuestion id={`${prefix}_confidence`} text="Puedo preguntar sin miedo o vergüenza." answers={answers} setAnswer={setAnswer} />
-              <div className="question-block">
+              <div className="teacher-flow-card compact-flow-card">
+                <div className="teacher-flow-summary"><div><span>AVANCE DE ESTE DOCENTE</span><strong>{answeredTeacherQuestions} de {teacherQuestions.length} respuestas</strong></div><b>{Math.round(answeredTeacherQuestions / teacherQuestions.length * 100)}%</b></div>
+                <div className="teacher-flow-progress"><i style={{ width: `${answeredTeacherQuestions / teacherQuestions.length * 100}%` }} /></div>
+                <p>Selecciona una calificación y la pregunta se compactará automáticamente. Puedes tocarla de nuevo para modificarla.</p>
+              </div>
+              <div className="teacher-question-shell">
+                <div className="linear-scale-guide"><span>Escala de calificación · 1 a 7</span>{teacherScale.map(([value, label]) => <div key={value}><b>{value}</b><small>{label}</small></div>)}</div>
+                <div className="teacher-question-scroll" aria-label="15 preguntas de evaluación docente">
+                  {teacherQuestions.map((question, questionIndex) => {
+                    const answerKey = `${prefix}_${question.id}`;
+                    const selectedLabel = String(answers[answerKey] || "");
+                    const selectedValue = teacherScale.find(([value, label]) => label === selectedLabel || value === selectedLabel)?.[0];
+                    const isExpanded = activeQuestionId === question.id;
+                    return <article key={question.id} className={`linear-question ${isExpanded ? "expanded" : "collapsed"} ${selectedLabel ? "answered" : ""}`} onClick={() => setExpandedTeacherQuestion(question.id)}>
+                      <div className="linear-question-copy"><span>{questionIndex + 1}</span><div><small>{question.dimension}</small><h3>{question.text}</h3></div>{selectedLabel ? <button type="button" className="answer-summary" onClick={(event) => { event.stopPropagation(); setExpandedTeacherQuestion(question.id); }}><b>{selectedValue}</b><span>{selectedLabel}</span><i>Editar</i></button> : <button type="button" className="answer-pending" onClick={(event) => { event.stopPropagation(); setExpandedTeacherQuestion(question.id); }}>Responder</button>}</div>
+                      {isExpanded && <div className="linear-answer-scale">{teacherScale.map(([value, label]) => <button type="button" key={value} className={selectedLabel === label ? "selected" : ""} aria-label={`${value}, ${label}`} aria-pressed={selectedLabel === label} onClick={(event) => { event.stopPropagation(); setAnswer(answerKey, label); const nextQuestion = teacherQuestions[questionIndex + 1]; setExpandedTeacherQuestion(nextQuestion?.id ?? question.id); }}><b>{value}</b><span>{label}</span></button>)}</div>}
+                    </article>;
+                  })}
+                </div>
+                <div className="question-scroll-footer"><span>Las respuestas se guardan automáticamente</span><b>{answeredTeacherQuestions === teacherQuestions.length ? "Evaluación completa ✓" : `${teacherQuestions.length - answeredTeacherQuestions} por responder`}</b></div>
+              </div>
+              <div className="question-block teacher-comment-block">
                 <h3>🌟 Lo mejor de {teacher.name.replace(/^(Mtra\.|Mtro\.)\s/, "")} es…</h3>
                 <textarea
                   maxLength={500}
@@ -724,9 +1138,9 @@ export default function Home() {
                 <small>{String(answers[`${prefix}_comment`] || "").length}/500 · No incluyas nombres de estudiantes.</small>
               </div>
               <div className="teacher-pagination">
-                <button className="secondary" disabled={teacherIndex === 0} onClick={() => setTeacherIndex((current) => current - 1)}>← Docente anterior</button>
-                <span>{teacherIndex + 1} de 7</span>
-                <button className="primary" disabled={teacherIndex === teachers.length - 1} onClick={() => setTeacherIndex((current) => current + 1)}>Siguiente docente →</button>
+                <button className="secondary" disabled={teacherIndex === 0} onClick={() => openTeacher(teacherIndex - 1)}>← Docente anterior</button>
+                <span>{teacherIndex + 1} de {studentTeachers.length}</span>
+                <button className="primary" disabled={!currentCompleted || teacherIndex === studentTeachers.length - 1} onClick={() => openTeacher(teacherIndex + 1)}>Siguiente docente →</button>
               </div>
             </div>
           </div>
@@ -746,10 +1160,19 @@ export default function Home() {
             <div className="person-copy"><span className="tag purple-tag">DIRECTIVO</span><h2>Lic. Luis Rodríguez</h2><p>Coordinación académica</p></div>
             <span className="card-status">Tarjeta individual</span>
           </div>
-          <ScaleQuestion id="director_listens" text="Me escucha cuando necesito hablar." answers={answers} setAnswer={setAnswer} />
-          <ScaleQuestion id="director_fair" text="Busca soluciones justas." answers={answers} setAnswer={setAnswer} />
-          <div className="question-block">
-            <h3>💬 ¿Qué debería saber sobre lo que viven los estudiantes?</h3>
+          <div className="director-evaluation-intro">
+            <div><span>EVALUACIÓN DIRECTIVA</span><h3>Tu experiencia con quienes dirigen IMMA</h3><p>Piensa en situaciones que hayas vivido y selecciona la opción que mejor represente tu experiencia.</p></div>
+            <b>5 preguntas</b>
+          </div>
+          <div className="director-questions">
+            <ScaleQuestion id="director_agreements" text="Cumple los acuerdos y organiza bien las actividades de la escuela." dimension="Organización y cumplimiento" answers={answers} setAnswer={setAnswer} />
+            <ScaleQuestion id="director_communication" text="Explica con claridad las decisiones, reglas y cambios importantes." dimension="Comunicación" answers={answers} setAnswer={setAnswer} />
+            <ScaleQuestion id="director_listens" text="Escucha a los estudiantes y toma en cuenta lo que pensamos." dimension="Escucha estudiantil" answers={answers} setAnswer={setAnswer} />
+            <ScaleQuestion id="director_fair" text="Nos trata con respeto y busca soluciones justas." dimension="Respeto y trato justo" answers={answers} setAnswer={setAnswer} />
+            <ScaleQuestion id="director_followup" text="Da seguimiento a los problemas hasta que se resuelven." dimension="Seguimiento" answers={answers} setAnswer={setAnswer} />
+          </div>
+          <div className="question-block director-comment-block">
+            <h3>💬 ¿Qué podrían hacer mejor quienes dirigen IMMA?</h3>
             <textarea maxLength={500} placeholder="Tu comentario es opcional" value={String(answers.director_comment || "")} onChange={(e) => setAnswer("director_comment", e.target.value)} />
             <small>{String(answers.director_comment || "").length}/500 · Evita incluir nombres o datos personales.</small>
           </div>
@@ -772,42 +1195,54 @@ export default function Home() {
                 const selected = Array.isArray(answers.support) && answers.support.includes(item);
                 return <Choice key={item} label={item} selected={selected} onClick={() => {
                   const current = Array.isArray(answers.support) ? answers.support : [];
-                  setAnswer("support", selected ? current.filter((x) => x !== item) : [...current, item]);
+                  if (item === "No he utilizado estos servicios") {
+                    setAnswer("support", selected ? [] : [item]);
+                  } else {
+                    const withoutNone = current.filter((x) => x !== "No he utilizado estos servicios");
+                    setAnswer("support", selected ? withoutNone.filter((x) => x !== item) : [...withoutNone, item]);
+                  }
                 }} />;
               })}
             </div>
           </div>
           {selectedSupport.includes("🧠 Psicología") && (
             <div className="support-evaluation">
-              <div className="person-card psychology-card">
-                <div className="avatar sunflower">EV</div>
-                <div className="person-copy"><span className="tag gold-tag">PSICOLOGÍA</span><h2>Lic. Elena Vargas</h2><p>Psicología y orientación IMMA</p></div>
-              </div>
-              <ScaleQuestion id="psych_listens" text="Me escuchó sin juzgarme." answers={answers} setAnswer={setAnswer} />
-              <ScaleQuestion id="psych_useful" text="Su apoyo me resultó útil." answers={answers} setAnswer={setAnswer} />
+                <div className="person-card psychology-card">
+                  <div className="avatar sunflower">EV</div>
+                  <div className="person-copy"><span className="tag gold-tag">PSICOLOGÍA</span><h2>Lic. Elena Vargas</h2><p>Psicología y orientación IMMA</p></div>
+                  <span className="support-question-count">3 preguntas</span>
+                </div>
+              <ScaleQuestion id="psych_listens" text="Me escuchó con atención y sin juzgarme." answers={answers} setAnswer={setAnswer} />
+              <ScaleQuestion id="psych_safe" text="Me hizo sentir en confianza para hablar de lo que me preocupaba." answers={answers} setAnswer={setAnswer} />
+              <ScaleQuestion id="psych_useful" text="Su orientación me ayudó a saber qué podía hacer después." answers={answers} setAnswer={setAnswer} />
             </div>
           )}
           {selectedSupport.includes("🩺 Enfermería") && (
             <div className="support-evaluation">
-              <div className="person-card nurse-card">
-                <div className="avatar light-blue">AS</div>
-                <div className="person-copy"><span className="tag">ENFERMERÍA</span><h2>Enf. Ana Sánchez</h2><p>Servicio de Enfermería IMMA</p></div>
-              </div>
+                <div className="person-card nurse-card">
+                  <div className="avatar light-blue">AS</div>
+                  <div className="person-copy"><span className="tag">ENFERMERÍA</span><h2>Enf. Ana Sánchez</h2><p>Servicio de Enfermería IMMA</p></div>
+                  <span className="support-question-count">3 preguntas</span>
+                </div>
               <ScaleQuestion id="nurse_care" text="Me atendió con amabilidad y tomó en serio lo que sentía." answers={answers} setAnswer={setAnswer} />
               <ScaleQuestion id="nurse_clear" text="Me explicó claramente qué debía hacer." answers={answers} setAnswer={setAnswer} />
+              <ScaleQuestion id="nurse_followup" text="Me indicó cuándo debía regresar o pedir más ayuda." answers={answers} setAnswer={setAnswer} />
             </div>
           )}
           {selectedSupport.includes("🤝 Tutoría") && (
             <div className="support-evaluation">
-              <div className="person-card support-card">
-                <div className="avatar sunflower">ML</div>
-                <div className="person-copy"><span className="tag gold-tag">TUTORÍA</span><h2>Lic. Mariana López</h2><p>Tutora de acompañamiento · Grupo A</p></div>
-              </div>
+                <div className="person-card support-card">
+                  <div className="avatar sunflower">ML</div>
+                  <div className="person-copy"><span className="tag gold-tag">TUTORÍA</span><h2>Lic. Mariana López</h2><p>Tutora de acompañamiento · Grupo A</p></div>
+                  <span className="support-question-count">3 preguntas</span>
+                </div>
               <ScaleQuestion id="tutor_listens" text="Me escucha cuando tengo una dificultad." answers={answers} setAnswer={setAnswer} />
+              <ScaleQuestion id="tutor_guidance" text="Me ayuda a encontrar una solución o el apoyo que necesito." answers={answers} setAnswer={setAnswer} />
               <ScaleQuestion id="tutor_cares" text="Se interesa por cómo estamos, no solo por las calificaciones." answers={answers} setAnswer={setAnswer} />
             </div>
           )}
           {selectedSupport.length === 0 && <div className="empty-support">Selecciona un área para ver cómo se presentará su evaluación.</div>}
+          {selectedSupport.includes("No he utilizado estos servicios") && <div className="empty-support support-none-note">Gracias por indicarlo. Puedes continuar; estas preguntas no se mostrarán porque todavía no has utilizado los servicios.</div>}
           <div className="question-block">
             <h3>💬 ¿Qué podría mejorar el IMMA en sus servicios de apoyo?</h3>
             <textarea maxLength={500} placeholder="Tu comentario es opcional" value={String(answers.support_comment || "")} onChange={(e) => setAnswer("support_comment", e.target.value)} />
@@ -901,7 +1336,7 @@ export default function Home() {
             {level > 0 && level < levels.length - 1 && (
               <div className="navigation">
                 <button className="secondary" onClick={back}>← Regresar</button>
-                <button className="primary" onClick={next}>Continuar →</button>
+                <button className="primary" onClick={next} disabled={level === 1 && (!selectedStudentGrade || !selectedStudentGroup || studentTeachers.length === 0)}>Continuar →</button>
               </div>
             )}
             {level === levels.length - 1 && <button className="secondary bottom-back" onClick={back}>← Revisar respuestas</button>}
@@ -934,27 +1369,24 @@ export default function Home() {
             <div className="dashboard-actions"><span className="demo-badge">Datos de prueba</span><button onClick={exportExcel} disabled={!analysisReady || Boolean(exporting)} title={!analysisReady ? "Disponible al superar 50 % de participación" : "Descargar libro completo de Excel"}>{exporting === "excel" ? "Preparando…" : "⬇ Excel completo"}</button><button onClick={exportPdf} disabled={!analysisReady || Boolean(exporting)} title={!analysisReady ? "Disponible al superar 50 % de participación" : "Descargar reporte ejecutivo PDF"}>{exporting === "pdf" ? "Preparando…" : "⬇ PDF ejecutivo"}</button><button onClick={() => { setAuthorized(false); sessionStorage.removeItem("imma-admin-preview"); }}>Salir</button></div>
           </div>
           {exporting && <div className="export-status" role="status" aria-live="polite"><span /> Generando un reporte compacto y completo. Estará listo en unos segundos.</div>}
-          <nav className="dashboard-tabs">
-            <button className={dashboardTab === "overview" ? "active" : ""} onClick={() => setDashboardTab("overview")}>Resumen</button>
-            <button className={dashboardTab === "teachers" ? "active" : ""} onClick={() => setDashboardTab("teachers")}>Análisis docente</button>
-            <button className={dashboardTab === "comments" ? "active" : ""} onClick={() => setDashboardTab("comments")}>Voz del alumnado</button>
-            <button className={dashboardTab === "report" ? "active" : ""} onClick={() => setDashboardTab("report")}>Reporte ejecutivo</button>
+          <nav className="dashboard-tabs" aria-label="Secciones de resultados">
+            {resultTabs.map((tab) => <button key={tab.id} className={dashboardTab === tab.id ? "active" : ""} onClick={() => { setDashboardTab(tab.id); if (tab.id === "support") setSelectedSupportArea(0); }}>{tab.label}</button>)}
           </nav>
-          <div className="filter-panel">
-            <div className="filter-title"><div><strong>🔎 Alcance del análisis</strong><span>Combina los filtros para consultar resultados específicos o generales.</span></div><button onClick={() => setFilters({ cycle: "2026–2027", grade: "Todos los grados", group: "Todos los grupos", area: "Todas las áreas" })}>Restablecer</button></div>
+          <div className="result-tab-context"><span>{activeResultTab.icon}</span><div><strong>{activeResultTab.label}</strong><p>{activeResultTab.description}</p></div><div className="result-context-stats"><b>{scopedResponseCount}<small>respuestas</small></b><b>{participationRate}%<small>participación</small></b></div></div>
+          <div className="filter-panel results-filter-bar">
+            <div className="filter-title"><div><strong>Filtros de consulta</strong><span>El contenido se actualiza al instante.</span></div><button onClick={() => setFilters({ cycle: "2026–2027", grade: "Todos los grados", group: "Todos los grupos", area: "Todas las áreas" })}>Limpiar filtros</button></div>
             <div className="filters">
               <label>Ciclo escolar<select value={filters.cycle} onChange={(e) => updateFilter("cycle", e.target.value)}><option>2026–2027</option><option>2025–2026</option><option>Comparar ciclos</option></select></label>
-              <label>Grado<select value={filters.grade} onChange={(e) => updateFilter("grade", e.target.value)}><option>Todos los grados</option><option>1.º de secundaria</option><option>2.º de secundaria</option><option>3.º de secundaria</option><option>1.º de preparatoria</option></select></label>
-              <label>Grupo<select value={filters.group} onChange={(e) => updateFilter("group", e.target.value)}><option>Todos los grupos</option><option>Grupo A</option><option>Grupo B</option><option>Grupo C</option></select></label>
+              <label>Grado<select value={filters.grade} onChange={(e) => setFilters((current) => ({ ...current, grade: e.target.value, group: "Todos los grupos" }))}><option>Todos los grados</option>{catalogGrades.map((grade) => <option key={grade}>{grade}</option>)}</select></label>
+              <label>Grupo<select value={filters.group} onChange={(e) => updateFilter("group", e.target.value)}><option>Todos los grupos</option>{resultGroupOptions.map((group) => <option key={group}>{group}</option>)}</select></label>
               <label>Área<select value={filters.area} onChange={(e) => updateFilter("area", e.target.value)}><option>Todas las áreas</option><option>Docentes</option><option>Dirección y coordinación</option><option>Psicología</option><option>Enfermería</option><option>Tutoría</option></select></label>
             </div>
-            <div className="active-scope"><span>Vista actual</span><strong>{scopeLabel}</strong></div>
           </div>
-          <section className={`participation-control ${analysisReady ? "ready" : "collecting"}`}>
+          {dashboardTab === "overview" && <section className={`participation-control ${analysisReady ? "ready" : "collecting"}`}>
             <div className="participation-ring" style={{ "--rate": `${participationRate * 3.6}deg` } as React.CSSProperties}><div><strong>{participationRate}%</strong><span>participación</span></div></div>
             <div className="participation-copy"><p>{analysisReady ? "ANÁLISIS HABILITADO" : "RECOPILANDO RESPUESTAS"}</p><h2>{analysisReady ? "La muestra ya permite comenzar el análisis" : `Faltan ${responsesNeeded} respuestas para superar el 50 %`}</h2><span>Las respuestas se almacenan desde el inicio. Las interpretaciones se actualizan automáticamente después de superar el umbral.</span><div className="sample-rules"><b>✓ Umbral: más de 50 %</b><b>✓ Mínimo de seguridad: 10 respuestas</b><b>{analysisReady ? "● Actualización activa" : "○ Análisis en espera"}</b></div></div>
             <div className="universe-control"><strong>Matrícula externa</strong><label>Total de estudiantes<input type="number" min="1" value={studentUniverse} onChange={(e) => setStudentUniverse(Math.max(1, Number(e.target.value)))} /></label><label>Respuestas recibidas<input type="number" min="0" max={studentUniverse} value={responseCount} onChange={(e) => setResponseCount(Math.min(studentUniverse, Math.max(0, Number(e.target.value))))} /></label><small>En producción estos valores se sincronizarán con el apartado externo.</small></div>
-          </section>
+          </section>}
           {analysisReady ? <>
           {dashboardTab === "overview" && <>
           <section className="executive-pulse" aria-label="Lectura ejecutiva de resultados">
@@ -989,9 +1421,9 @@ export default function Home() {
             </article>
           </div>
           <article className="staff-table">
-            <div className="card-heading"><div><h2>Resultados por persona evaluada</h2><p>El análisis individual corresponde al personal, nunca al estudiante.</p></div><button onClick={exportExcel} disabled={Boolean(exporting)}>Exportar reporte</button></div>
+            <div className="card-heading"><div><h2>Vista rápida del equipo docente</h2><p>Cinco perfiles como referencia. Consulta el comparativo para explorar el resto.</p></div><button onClick={() => setDashboardTab("teachers")}>Ver todos →</button></div>
             <div className="table-head"><span>Persona / área</span><span>Evaluaciones</span><span>Promedio</span><span>Positivas</span><span>Estado</span></div>
-            {scopedTeacherAnalysis.map((person) => (
+            {scopedTeacherAnalysis.slice(0, 5).map((person) => (
               <div className="table-row" key={person.name}>
                 <span><strong>{person.name}</strong><small>{person.subject} · {filters.grade} · {filters.group}</small></span>
                 <span>{person.responses}</span><span>★ {person.score}</span><span>{person.positive}%</span>
@@ -1007,9 +1439,12 @@ export default function Home() {
               <div className="teacher-analysis-split">
                 <div className="analysis-ranking">
                   <div className="ranking-head"><strong>Comparativo docente</strong><span>Selecciona para ver el detalle</span></div>
-                  {scopedTeacherAnalysis.map((item, index) => <button key={item.name} className={selectedAnalysisTeacher === index ? "active" : ""} onClick={() => { setSelectedAnalysisTeacher(index); setCommentsExpanded(false); }}>
-                    <span className="rank-number">{index + 1}</span><span className="rank-person"><strong>{item.name}</strong><small>{item.subject}</small></span><span className="rank-score"><strong>{item.score}</strong><small>{item.trend}</small></span><b>›</b>
-                  </button>)}
+                  <div className={`analysis-teacher-search ${analysisTeacherOpen ? "open" : ""}`}><span aria-hidden="true">⌕</span><input type="text" role="combobox" aria-label="Buscar profesor" aria-expanded={analysisTeacherOpen} aria-controls="analysis-teacher-options" placeholder="Buscar profesor por nombre…" value={analysisTeacherSearch} onFocus={(event) => { event.currentTarget.select(); setAnalysisTeacherOpen(true); }} onClick={() => setAnalysisTeacherOpen(true)} onChange={(event) => { setAnalysisTeacherSearch(event.target.value); setAnalysisTeacherOpen(true); }} onKeyDown={(event) => { if (event.key === "Escape") { setAnalysisTeacherOpen(false); setAnalysisTeacherSearch(""); } }} onBlur={() => setTimeout(() => setAnalysisTeacherOpen(false), 120)} /><b aria-hidden="true">⌄</b>{analysisTeacherOpen && <div id="analysis-teacher-options" className="analysis-teacher-options" role="listbox" onMouseDown={(event) => event.preventDefault()}>{analysisTeacherMatches.map(({ teacher, index }) => <button type="button" role="option" aria-selected={selectedAnalysisTeacher === index} className={selectedAnalysisTeacher === index ? "selected" : ""} key={teacher.code} onClick={() => { setSelectedAnalysisTeacher(index); setAnalysisTeacherSearch(""); setAnalysisTeacherOpen(false); setCommentsExpanded(false); }}><strong>{teacher.name}</strong><small>{teacher.subject}</small></button>)}{analysisTeacherMatches.length === 0 && <p>No se encontraron profesores.</p>}</div>}</div>
+                  <div className="analysis-ranking-preview">
+                    {preliminaryAnalysisTeachers.map(({ teacher: item, index }, position) => <button key={item.code} className={selectedAnalysisTeacher === index ? "active" : ""} onClick={() => { setSelectedAnalysisTeacher(index); setCommentsExpanded(false); }}>
+                      <span className="rank-number">{position + 1}</span><span className="rank-person"><strong>{item.name}</strong><small>{item.subject}</small></span><span className="rank-score"><strong>{item.score}</strong><small>{item.trend}</small></span><b>›</b>
+                    </button>)}
+                  </div>
                 </div>
                 <article className={`teacher-detail teacher-tone-${selectedAnalysisTeacher + 1}`}>
                   <div className="detail-head"><div className="detail-avatar">{focusedTeacher.name.split(" ").slice(-1)[0].slice(0,2).toUpperCase()}</div><div><p>REPORTE INDIVIDUAL</p><h2>{focusedTeacher.name}</h2><span>{focusedTeacher.subject} · {focusedTeacher.responses} evaluaciones válidas</span></div><b className={focusedTeacher.priority === "Fortaleza" ? "status-good" : "status-watch"}>{focusedTeacher.priority}</b></div>
@@ -1026,14 +1461,62 @@ export default function Home() {
               </div>
             </section>
           )}
+          {dashboardTab === "matrix" && (
+            <section className="evaluation-matrix">
+              <div className="page-kicker"><span>Vista especializada · Lineamientos de evaluación docente</span><strong>{scopeLabel}</strong></div>
+              <div className="matrix-intro"><div><p className="eyebrow">MATRIZ DE EVALUACIÓN</p><h2>Resultados consolidados por reactivo</h2><p>La matriz conserva la escala original: un promedio menor representa una mejor valoración. El índice transforma el resultado a una lectura de 0 a 100.</p></div><div className="matrix-formula"><strong>Índice = (7 − promedio) ÷ 6</strong><span>1–3 favorables · 5–7 críticas</span></div></div>
+              <div className="matrix-toolbar"><div className="matrix-legend"><span><i className="matrix-good" /> 75–100 Fortaleza</span><span><i className="matrix-watch" /> 50–74 Atención</span><span><i className="matrix-priority" /> 0–49 Área prioritaria</span></div><div className="matrix-toolbar-actions"><button type="button" className="matrix-excel-button" onClick={() => setMatrixExportOpen(true)}>⬇ Generar Excel de evaluación</button><button type="button" onClick={() => setMatrixDetailOpen((current) => !current)}>{matrixDetailOpen ? "Ver resumen" : "Ver 15 reactivos"} <b>{matrixDetailOpen ? "↑" : "↓"}</b></button></div></div>
+              {!matrixDetailOpen && <div className="dimension-summary-grid">{dimensionMatrix.map((row) => <article key={row.dimension}><div><span>{row.questions} {row.questions === 1 ? "reactivo" : "reactivos"}</span><em className={row.level === "Fortaleza" ? "matrix-level-good" : row.level === "Atención" ? "matrix-level-watch" : "matrix-level-priority"}>{row.level}</em></div><h3>{row.dimension}</h3><div className="dimension-score"><strong>{row.performanceIndex}</strong><span>/100<small>Índice</small></span><b>{row.average}<small>Promedio / 7</small></b></div><i><b style={{ width: `${row.performanceIndex}%` }} /></i></article>)}</div>}
+              {matrixDetailOpen && <div className="matrix-scroll">
+                <div className="matrix-table matrix-head"><span>ID</span><span>Dimensión / pregunta</span><span>Respuestas</span><span>Promedio</span><span>Índice</span><span>Nivel</span><span>Favorables</span><span>Críticas</span></div>
+                {teacherMatrix.map((row) => <div className="matrix-table matrix-row" key={row.id}><span><b>{row.id.toUpperCase()}</b></span><span><strong>{row.dimension}</strong><small>{row.text}</small></span><span>{row.responses}</span><span><b>{row.average}</b><small>/ 7</small></span><span><b>{row.performanceIndex}</b><small>/ 100</small></span><span><em className={row.level === "Fortaleza" ? "matrix-level-good" : row.level === "Atención" ? "matrix-level-watch" : "matrix-level-priority"}>{row.level}</em></span><span>{row.favorable} <small>({Math.round(row.favorable / row.responses * 100)}%)</small></span><span>{row.critical} <small>({Math.round(row.critical / row.responses * 100)}%)</small></span></div>)}
+              </div>}
+              <p className="matrix-note">Los resultados deben interpretarse junto con participación, comentarios anonimizados y contexto. Una sola medición no debe usarse como decisión automática sobre el docente.</p>
+              {matrixExportOpen && <div className="matrix-export-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setMatrixExportOpen(false); }}>
+                <section className="matrix-export-dialog" role="dialog" aria-modal="true" aria-labelledby="matrix-export-title">
+                  <button type="button" className="matrix-dialog-close" onClick={() => setMatrixExportOpen(false)} aria-label="Cerrar">×</button>
+                  <div className="matrix-dialog-heading"><span>📊</span><div><p>EXPORTACIÓN ESPECIALIZADA</p><h2 id="matrix-export-title">Generar matriz docente en Excel</h2><small>La plantilla se llenará con las respuestas del alcance seleccionado.</small></div></div>
+                  <div className="matrix-export-filters">
+                    <div className="matrix-teacher-filter">
+                      <label htmlFor="matrix-teacher-search">Resultado a generar</label>
+                      <div className={`matrix-teacher-search ${matrixTeacherOpen ? "open" : ""}`}><span aria-hidden="true">⌕</span><input id="matrix-teacher-search" type="text" role="combobox" aria-autocomplete="list" aria-expanded={matrixTeacherOpen} aria-controls="matrix-teacher-options" autoComplete="off" placeholder="Selecciona o escribe el nombre del maestro…" value={matrixTeacherSearch} onFocus={(event) => { event.currentTarget.select(); setMatrixTeacherOpen(true); }} onClick={() => setMatrixTeacherOpen(true)} onChange={(event) => updateMatrixTeacherSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") { setMatrixTeacherOpen(false); setMatrixTeacherSearch(selectedMatrixLabel); } }} onBlur={() => setTimeout(() => { setMatrixTeacherOpen(false); setMatrixTeacherSearch(selectedMatrixLabel); }, 120)} /><b aria-hidden="true">⌄</b>{matrixTeacherOpen && <div id="matrix-teacher-options" className="matrix-teacher-options" role="listbox" onMouseDown={(event) => event.preventDefault()}><button type="button" role="option" aria-selected={matrixExportTeacher === "general"} className={matrixExportTeacher === "general" ? "selected" : ""} onClick={() => chooseMatrixTeacher("general")}><strong>Resultado general</strong><small>Todos los docentes</small></button>{visibleMatrixTeacherNames.map((name) => { const assignments = teacherCatalog.filter((teacher) => teacher.name === name); const subjectCount = new Set(assignments.map((teacher) => teacher.subject)).size; return <button type="button" role="option" aria-selected={matrixExportTeacher === name} className={matrixExportTeacher === name ? "selected" : ""} onClick={() => chooseMatrixTeacher(name)} key={name}><strong>{name}</strong><small>{subjectCount} {subjectCount === 1 ? "materia" : "materias"}</small></button>; })}{visibleMatrixTeacherNames.length === 0 && <p>No se encontraron maestros con ese nombre.</p>}</div>}</div>
+                    </div>
+                    <label>Ciclo escolar<select value={filters.cycle} onChange={(event) => updateFilter("cycle", event.target.value)}><option>2026–2027</option><option>2025–2026</option></select></label>
+                    <label>Grado<select value={filters.grade} onChange={(event) => setFilters((current) => ({ ...current, grade: event.target.value, group: "Todos los grupos" }))}><option value="Todos los grados">Todos los grados que imparte</option>{matrixGradeOptions.map((grade) => <option value={grade} key={grade}>{grade}</option>)}</select></label>
+                    <label>Grupo<select value={filters.group} onChange={(event) => updateFilter("group", event.target.value)}><option value="Todos los grupos">Todos los grupos que imparte</option>{matrixGroupOptions.map((group) => <option value={group} key={group}>{group}</option>)}</select></label>
+                  </div>
+                  {matrixExportTeacher !== "general" && <div className="matrix-teacher-context"><span>{matrixExportTeacher.slice(0, 1)}</span><div><strong>{matrixExportTeacher}</strong><small>{selectedMatrixSubjects.join(" · ")}</small><p>{matrixGradeOptions.length} {matrixGradeOptions.length === 1 ? "grado" : "grados"} · {[...new Set(selectedMatrixAssignments.map((teacher) => teacher.group))].length} grupos registrados</p></div></div>}
+                  <div className="matrix-export-summary"><div><span>Alcance</span><strong>{matrixExportTeacher === "general" ? `${new Set(scopedTeacherAnalysis.map((teacher) => teacher.name)).size} docentes` : "1 docente"}</strong></div><div><span>Reactivos</span><strong>15 por evaluación</strong></div><div><span>Libro</span><strong>4 hojas vinculadas</strong></div></div>
+                  <div className="matrix-export-notice"><b>✓</b><p>El archivo incluirá Cuestionario, Captura, Matriz evaluación y Dashboard, con un formato limpio y cálculos actualizados al abrirlo.</p></div>
+                  <div className="matrix-dialog-actions"><button type="button" className="secondary" onClick={() => setMatrixExportOpen(false)}>Cancelar</button><button type="button" className="primary" disabled={matrixExporting} onClick={exportTeacherEvaluationWorkbook}>{matrixExporting ? "Generando archivo…" : "Descargar Excel lleno →"}</button></div>
+                </section>
+              </div>}
+            </section>
+          )}
+          {dashboardTab === "support" && (
+            <section className="support-results">
+              <div className="page-kicker"><span>Vista especializada · Escala de cuatro opciones</span><strong>{scopeLabel}</strong></div>
+              <div className="support-results-intro"><div><p className="eyebrow">DIRECCIÓN Y RED DE APOYO</p><h2>Cómo viven los estudiantes cada servicio</h2><p>Los porcentajes agrupan “Sí, totalmente” y “Casi siempre”. Cada área se analiza únicamente con estudiantes que indicaron haber tenido contacto con ella.</p></div><div className="support-scale-key"><span>Favorables</span><strong>😄 + 🙂</strong><small>Las respuestas desfavorables se revisan junto con comentarios y contexto.</small></div></div>
+              <div className="support-result-layout">
+                <nav className="support-area-list" aria-label="Áreas evaluadas">
+                  {visibleSupportAreas.map((area, index) => <button type="button" key={area.area} className={focusedSupportArea.area === area.area ? "active" : ""} onClick={() => setSelectedSupportArea(index)}><span>{area.icon}</span><div><strong>{area.area}</strong><small>{area.questions.length} preguntas · {scopedResponseCount} respuestas</small></div><b>{area.average}%</b></button>)}
+                </nav>
+                <article className={`support-area-detail support-accent-${focusedSupportArea.accent}`}>
+                  <div className="support-detail-head"><span>{focusedSupportArea.icon}</span><div><small>RESULTADO DEL ÁREA</small><h3>{focusedSupportArea.area}</h3><p>{focusedSupportArea.questions.length} indicadores evaluados con la escala habitual del test.</p></div><strong>{focusedSupportArea.average}%<small>positivo</small></strong></div>
+                  <div className="support-question-results">{focusedSupportArea.questions.map((question) => <div key={question.label}><div><span><b>{question.label}</b><small>{question.text}</small></span><strong>{question.positive}%</strong></div><i><b style={{ width: `${question.positive}%` }} /></i></div>)}</div>
+                  <div className="support-result-note"><strong>Lectura recomendada</strong><p>{focusedSupportArea.average >= 85 ? "El área muestra una experiencia sólida. Conviene conservar las prácticas mejor valoradas y revisar los comentarios para sostenerlas." : "El área presenta fortalezas y oportunidades concretas. Revise primero el indicador más bajo y contraste con los comentarios anónimos."}</p></div>
+                </article>
+              </div>
+            </section>
+          )}
           {dashboardTab === "comments" && (
             <section className="comments-analysis">
               <div className="page-kicker"><span>Vista especializada · Voz del alumnado</span><strong>{scopeLabel}</strong></div>
               <div className="analysis-intro voice-intro"><div><p className="eyebrow">VOZ DEL ALUMNADO</p><h2>Temas, emociones y propuestas recurrentes</h2><p>Comentarios revisados, anonimizados y clasificados dentro del alcance seleccionado. Las menciones indican recurrencia, no una calificación ni el número de estudiantes.</p></div><button className="voice-export" onClick={exportStudentVoicePdf} disabled={Boolean(exporting)}>{exporting === "voice-pdf" ? "Generando ficha…" : "↓ Exportar ficha PDF"}</button></div>
               <div className="voice-summary"><article><span>Lectura principal</span><strong>{voiceProfile.focus}</strong><p>Corresponde únicamente a {scopeLabel}.</p></article><article><span>Petición más recurrente</span><strong>{voiceThemes.filter((theme) => theme.reading !== "Fortaleza").sort((a, b) => b.mentions - a.mentions)[0].label}</strong><p>{voiceThemes.filter((theme) => theme.reading !== "Fortaleza").sort((a, b) => b.mentions - a.mentions)[0].action}</p></article><article><span>Decisión sugerida</span><strong>{voiceProfile.action}</strong><p>Mostrar seguimiento fortalece la percepción de escucha.</p></article></div>
               <div className="theme-cloud">{voiceThemes.map((theme) => <span key={theme.label}>{theme.label} <b>{theme.mentions}</b></span>)}</div>
-              <div className="comment-columns"><article><h3>🌟 Reconocimientos</h3>{voiceComments.filter((comment) => comment.category === "Reconocimiento").map((comment) => <blockquote key={comment.text}>“{comment.text}”</blockquote>)}</article><article><h3>🔧 Sugerencias</h3>{voiceComments.filter((comment) => comment.category === "Sugerencia").map((comment) => <blockquote key={comment.text}>“{comment.text}”</blockquote>)}</article><article><h3>⚠️ Atención</h3><p>{reservedVoiceCount ? `${reservedVoiceCount} comentario${reservedVoiceCount === 1 ? " fue reservado" : "s fueron reservados"} para revisión del equipo responsable. No se muestran aquí para proteger su confidencialidad.` : "No hay comentarios reservados dentro del alcance seleccionado."}</p></article></div>
-              <div className="voice-reading"><strong>Cómo interpretar esta vista</strong><p><b>Reconocimientos</b> muestran prácticas que conviene conservar. <b>Sugerencias</b> señalan oportunidades concretas, no inconformidades aisladas. <b>Atención</b> agrupa mensajes que requieren un circuito confidencial. Compare siempre las menciones con participación, filtros y evolución entre periodos.</p></div>
+              <button type="button" className="details-toggle" onClick={() => setVoiceDetailOpen((current) => !current)}>{voiceDetailOpen ? "Ocultar comentarios" : "Ver comentarios clasificados"}<b>{voiceDetailOpen ? "↑" : "↓"}</b></button>
+              {voiceDetailOpen && <><div className="comment-columns"><article><h3>🌟 Reconocimientos</h3>{voiceComments.filter((comment) => comment.category === "Reconocimiento").map((comment) => <blockquote key={comment.text}>“{comment.text}”</blockquote>)}</article><article><h3>🔧 Sugerencias</h3>{voiceComments.filter((comment) => comment.category === "Sugerencia").map((comment) => <blockquote key={comment.text}>“{comment.text}”</blockquote>)}</article><article><h3>⚠️ Atención</h3><p>{reservedVoiceCount ? `${reservedVoiceCount} comentario${reservedVoiceCount === 1 ? " fue reservado" : "s fueron reservados"} para revisión del equipo responsable. No se muestran aquí para proteger su confidencialidad.` : "No hay comentarios reservados dentro del alcance seleccionado."}</p></article></div><div className="voice-reading"><strong>Cómo interpretar esta vista</strong><p><b>Reconocimientos</b> muestran prácticas que conviene conservar. <b>Sugerencias</b> señalan oportunidades concretas, no inconformidades aisladas. <b>Atención</b> agrupa mensajes que requieren un circuito confidencial. Compare siempre las menciones con participación, filtros y evolución entre periodos.</p></div></>}
             </section>
           )}
           {dashboardTab === "report" && (

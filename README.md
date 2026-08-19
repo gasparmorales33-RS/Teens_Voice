@@ -21,7 +21,7 @@ Prototipo navegable del test anónimo de experiencia estudiantil del Instituto M
 ## Requisitos
 
 - Node.js 22.13 o posterior.
-- npm o pnpm.
+- npm (el proyecto usa `package-lock.json`).
 
 ## Instalación
 
@@ -48,11 +48,18 @@ Estas credenciales están incorporadas únicamente para la demostración local. 
 ## Archivos principales
 
 - `app/page.tsx`: formulario, navegación, análisis, filtros y reportes.
+- `app/teacher-catalog.ts`: catálogo de docentes por grado y grupo.
 - `app/globals.css`: identidad visual y diseño adaptable.
 - `app/layout.tsx`: metadatos y tipografías.
 - `public/imma-logo.png`: logotipo mostrado por la aplicación.
-- `.openai/hosting.json`: configuración de alojamiento.
+- `public/IMMA_Teens_Voice_Evaluacion_Docente_Plantilla.xlsx`: plantilla base de la exportación docente.
 - `package.json`: dependencias y comandos.
+
+## Despliegue
+
+El proyecto es una aplicación Next.js estándar y se despliega en Vercel sin
+configuración adicional: Vercel detecta el framework, ejecuta `npm run build` y
+publica el resultado. Cada push a `main` genera un despliegue nuevo.
 
 ## Funcionamiento de la participación
 
