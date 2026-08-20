@@ -522,7 +522,7 @@ export default function Home() {
   const exportTeacherEvaluationWorkbook = async () => {
     setMatrixExporting(true);
     try {
-      const XLSX = await import("xlsx");
+      const XLSX = await import("xlsx-js-style");
       const templateResponse = await fetch("/IMMA_Teens_Voice_Evaluacion_Docente_Plantilla.xlsx");
       if (!templateResponse.ok) throw new Error("No fue posible cargar la plantilla de evaluación docente.");
       const workbook = XLSX.read(await templateResponse.arrayBuffer(), { type: "array", cellStyles: true, cellFormula: true });
@@ -595,6 +595,16 @@ export default function Home() {
 
       const palette = {
         navy: "18246B",
+        blue: "263CA0",
+        cyan: "35ACD2",
+        gold: "F6C515",
+        goldSoft: "FFF5CC",
+        green: "23845D",
+        greenSoft: "E8F6EF",
+        amber: "A66F00",
+        amberSoft: "FFF1C2",
+        red: "B33A3A",
+        redSoft: "FDE9E7",
         slate: "44506A",
         pale: "F5F7FB",
         soft: "E9EDF5",
@@ -690,21 +700,56 @@ export default function Home() {
       for (let row = 6; row <= 20; row += 1) {
         styleCell(matrixSheet, `E${row}`, { numFmt: "0.00", alignment: { horizontal: "center", vertical: "center" } });
         styleCell(matrixSheet, `F${row}`, { numFmt: "0%", alignment: { horizontal: "center", vertical: "center" } });
+        const performance = Number(matrixSheet[`F${row}`]?.v ?? 0);
+        const statusStyle = performance >= 0.85
+          ? { fill: { patternType: "solid", fgColor: { rgb: palette.greenSoft } }, font: { name: "Aptos", sz: 10, bold: true, color: { rgb: palette.green } } }
+          : performance >= 0.7
+            ? { fill: { patternType: "solid", fgColor: { rgb: palette.amberSoft } }, font: { name: "Aptos", sz: 10, bold: true, color: { rgb: palette.amber } } }
+            : { fill: { patternType: "solid", fgColor: { rgb: palette.redSoft } }, font: { name: "Aptos", sz: 10, bold: true, color: { rgb: palette.red } } };
+        styleCell(matrixSheet, `F${row}`, { ...statusStyle, numFmt: "0%", alignment: { horizontal: "center", vertical: "center" } });
+        styleCell(matrixSheet, `G${row}`, { ...statusStyle, alignment: { horizontal: "center", vertical: "center", wrapText: true } });
       }
 
       styleRange(dashboardSheet, "A1:L1", titleStyle);
+      styleRange(dashboardSheet, "A2:L2", {
+        fill: { patternType: "solid", fgColor: { rgb: palette.gold } },
+        font: { name: "Aptos", sz: 10, bold: true, color: { rgb: palette.navy } },
+        alignment: { vertical: "center" },
+      });
       ["A4:C4", "D4:F4", "G4:I4", "J4:L4", "A9:C9", "E9:F9"].forEach((range) => styleRange(dashboardSheet, range, headerStyle));
       ["A5:C5", "D5:F5", "G5:I5", "J5:L5"].forEach((range) => styleRange(dashboardSheet, range, {
         fill: { patternType: "solid", fgColor: { rgb: palette.white } },
-        font: { name: "Aptos Display", sz: 16, bold: true, color: { rgb: palette.navy } },
-        border: borderBottom,
+        font: { name: "Aptos Display", sz: 18, bold: true, color: { rgb: palette.navy } },
+        border: { bottom: { style: "medium", color: { rgb: palette.gold } } },
         alignment: { horizontal: "center", vertical: "center" },
       }));
+      styleRange(dashboardSheet, "G5:I5", {
+        fill: { patternType: "solid", fgColor: { rgb: overallMean <= 1.9 ? palette.greenSoft : overallMean <= 2.8 ? palette.amberSoft : palette.redSoft } },
+        font: { name: "Aptos Display", sz: 18, bold: true, color: { rgb: overallMean <= 1.9 ? palette.green : overallMean <= 2.8 ? palette.amber : palette.red } },
+        border: { bottom: { style: "medium", color: { rgb: overallMean <= 1.9 ? palette.green : overallMean <= 2.8 ? palette.amber : palette.red } } },
+        alignment: { horizontal: "center", vertical: "center" },
+      });
+      styleRange(dashboardSheet, "J5:L5", {
+        fill: { patternType: "solid", fgColor: { rgb: overallMean <= 1.9 ? palette.greenSoft : overallMean <= 2.8 ? palette.amberSoft : palette.redSoft } },
+        font: { name: "Aptos Display", sz: 15, bold: true, color: { rgb: overallMean <= 1.9 ? palette.green : overallMean <= 2.8 ? palette.amber : palette.red } },
+        border: { bottom: { style: "medium", color: { rgb: overallMean <= 1.9 ? palette.green : overallMean <= 2.8 ? palette.amber : palette.red } } },
+        alignment: { horizontal: "center", vertical: "center", wrapText: true },
+      });
       styleStripedRows(dashboardSheet, 10, 24, "F");
+      for (let row = 10; row <= 18; row += 1) {
+        const indexValue = Number(dashboardSheet[`C${row}`]?.v ?? 0);
+        const indicatorStyle = indexValue >= 0.85
+          ? { fill: { patternType: "solid", fgColor: { rgb: palette.greenSoft } }, font: { name: "Aptos", sz: 10, bold: true, color: { rgb: palette.green } } }
+          : indexValue >= 0.7
+            ? { fill: { patternType: "solid", fgColor: { rgb: palette.amberSoft } }, font: { name: "Aptos", sz: 10, bold: true, color: { rgb: palette.amber } } }
+            : { fill: { patternType: "solid", fgColor: { rgb: palette.redSoft } }, font: { name: "Aptos", sz: 10, bold: true, color: { rgb: palette.red } } };
+        styleCell(dashboardSheet, `C${row}`, { ...indicatorStyle, numFmt: "0%", alignment: { horizontal: "center", vertical: "center" } });
+      }
       dashboardSheet["!cols"] = [26, 18, 16, 3, 28, 18, 18, 18, 18, 18, 18, 18].map((wch) => ({ wch }));
       dashboardSheet["!rows"] = dashboardSheet["!rows"] ?? [];
       dashboardSheet["!rows"][0] = { hpt: 28 };
-      dashboardSheet["!rows"][4] = { hpt: 32 };
+      dashboardSheet["!rows"][1] = { hpt: 20 };
+      dashboardSheet["!rows"][4] = { hpt: 44 };
 
       if (workbook.Sheets["Comparación"]) {
         delete workbook.Sheets["Comparación"];
