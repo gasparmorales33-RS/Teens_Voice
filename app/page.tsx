@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { teacherCatalog, type TeacherAssignment } from "./teacher-catalog";
+import { useEffect, useMemo, useState } from "react";
+import { teacherCatalog } from "./teacher-catalog";
+import { aggregate, buildDataset, teacherDimensions, teacherQuestions } from "./results-engine";
 
 type Answers = Record<string, string | string[]>;
 
@@ -27,25 +28,6 @@ const teacherScale = [
   ["5", "Malo"], ["6", "Muy malo"], ["7", "Pésimo"],
 ];
 
-const teacherQuestions = [
-  { id: "q01", dimension: "Cumplimiento profesional", text: "El maestro asiste a todas sus clases." },
-  { id: "q02", dimension: "Cumplimiento profesional", text: "El maestro empieza y termina la clase a tiempo." },
-  { id: "q03", dimension: "Planeación y evaluación", text: "Explica claramente las reglas de la clase y cómo va a calificar." },
-  { id: "q04", dimension: "Dominio y claridad", text: "Conoce bien los temas de la materia." },
-  { id: "q05", dimension: "Dominio y claridad", text: "Explica los temas de forma clara y fácil de entender." },
-  { id: "q06", dimension: "Acompañamiento", text: "Responde nuestras preguntas y aclara nuestras dudas." },
-  { id: "q07", dimension: "Participación y aprendizaje", text: "Motiva a los estudiantes a participar en clase." },
-  { id: "q08", dimension: "Participación y aprendizaje", text: "Relaciona los temas con situaciones de la vida diaria." },
-  { id: "q09", dimension: "Participación y aprendizaje", text: "Organiza actividades para trabajar en equipo." },
-  { id: "q10", dimension: "Recursos didácticos", text: "Utiliza recursos y tecnología que ayudan a aprender." },
-  { id: "q11", dimension: "Convivencia y respeto", text: "Trata a los estudiantes con respeto." },
-  { id: "q12", dimension: "Convivencia y respeto", text: "Crea un ambiente de confianza, inclusión y respeto." },
-  { id: "q13", dimension: "Estrategias didácticas", text: "Hace que sus clases sean dinámicas e interesantes." },
-  { id: "q14", dimension: "Planeación y evaluación", text: "Califica de forma clara y de acuerdo con lo que explicó." },
-  { id: "q15", dimension: "Valoración global", text: "En general, ¿cómo calificas el trabajo del maestro?" },
-];
-
-const teacherDimensions = [...new Set(teacherQuestions.map((question) => question.dimension))];
 const teacherIndicatorLabels = ["Claridad al explicar", "Trato respetuoso", "Evaluación justa", "Confianza para preguntar"];
 const evaluationReading = (value: number) => value >= 75 ? "Fortaleza" : value >= 50 ? "Atención" : "Área prioritaria";
 const matrixAverageFromIndex = (value: number) => Number((7 - (value / 100) * 6).toFixed(2));
@@ -71,42 +53,7 @@ const resultTabs = [
   { id: "report", icon: "▤", label: "Reporte", description: "Hallazgos y plan de acción" },
 ] as const;
 const catalogGroupsForGrade = (grade: string) => [...new Set(teacherCatalog.filter((teacher) => teacher.grade === grade).map((teacher) => teacher.group))];
-const hashText = (value: string) => [...value].reduce((total, character) => (total * 31 + character.charCodeAt(0)) >>> 0, 7);
-const buildTeacherAnalysis = (teacher: TeacherAssignment) => {
-  const seed = hashText(`${teacher.name}-${teacher.subject}`);
-  const score = Number((3.7 + (seed % 10) / 10).toFixed(1));
-  const positive = Math.min(94, 72 + (seed % 23));
-  const indicators = [0, 1, 2, 3].map((offset) => Math.min(97, Math.max(65, positive + ((seed >> (offset * 3)) % 11) - 5)));
-  const strengths = ["Claridad al explicar", "Trato respetuoso", "Dominio de la materia", "Participación en clase", "Aplicación práctica"];
-  const opportunities = ["Diversificar actividades", "Retroalimentación más frecuente", "Confianza para preguntar", "Ritmo de explicación", "Criterios de evaluación"];
-  return {
-    ...teacher,
-    score,
-    positive,
-    responses: 22 + (seed % 8),
-    trend: `${seed % 5 === 0 ? "-" : "+"}${1 + (seed % 6)}%`,
-    strength: strengths[seed % strengths.length],
-    opportunity: opportunities[(seed + 2) % opportunities.length],
-    priority: positive >= 86 ? "Fortaleza" : positive >= 78 ? "Seguimiento" : "Mejora",
-    indicators,
-    recommendation: `Conservar las prácticas que facilitan el aprendizaje en ${teacher.subject} y acordar una mejora observable con seguimiento durante el siguiente periodo.`,
-    comments: [
-      { category: "Reconocimiento", text: `Las explicaciones y actividades de ${teacher.subject} ayudan a comprender los temas.` },
-      { category: "Sugerencia", text: "Sería útil contar con más ejemplos y retroalimentación durante las actividades." },
-      { category: "Experiencia de aula", text: "El ambiente de la clase permite participar y expresar dudas." },
-    ],
-  };
-};
 
-const teacherAnalysis = [
-  { name: "Mtra. Andrea Martínez", subject: "Matemáticas", score: 4.6, positive: 91, responses: 28, trend: "+6%", strength: "Claridad al explicar", opportunity: "Diversificar actividades", priority: "Fortaleza", indicators: [94, 96, 88, 86], recommendation: "Conservar la secuencia de explicación y sumar una actividad práctica o visual por tema para atender distintos estilos de aprendizaje.", comments: [{ category: "Reconocimiento", text: "Explica de distintas maneras hasta que todos entendemos." }, { category: "Sugerencia", text: "Me ayudaría practicar con ejemplos de situaciones reales." }, { category: "Experiencia de aula", text: "Puedo preguntar sin sentir que voy atrasando al grupo." }] },
-  { name: "Mtro. Carlos Ramírez", subject: "Español", score: 4.1, positive: 82, responses: 27, trend: "+2%", strength: "Trato respetuoso", opportunity: "Retroalimentación más frecuente", priority: "Seguimiento", indicators: [84, 92, 76, 81], recommendation: "Incorporar una devolución breve con un logro y un siguiente paso en cada entrega; verificar comprensión antes de iniciar una actividad nueva.", comments: [{ category: "Reconocimiento", text: "Escucha nuestras opiniones y mantiene el respeto en clase." }, { category: "Sugerencia", text: "Quisiera saber con más claridad qué puedo mejorar en mis trabajos." }, { category: "Experiencia de aula", text: "Las conversaciones en grupo me ayudan a participar." }] },
-  { name: "Mtra. Laura García", subject: "Ciencias", score: 3.8, positive: 74, responses: 26, trend: "-3%", strength: "Dominio de la materia", opportunity: "Confianza para preguntar", priority: "Mejora", indicators: [82, 86, 73, 65], recommendation: "Abrir pausas de preguntas anónimas y cerrar cada explicación con una comprobación breve de comprensión antes de avanzar.", comments: [{ category: "Reconocimiento", text: "Sabe mucho de los temas y relaciona la clase con experimentos." }, { category: "Sugerencia", text: "A veces necesito más tiempo para preguntar o anotar." }, { category: "Experiencia de aula", text: "Participo más cuando trabajamos en equipos pequeños." }] },
-  { name: "Mtro. Javier Pérez", subject: "Inglés", score: 4.4, positive: 87, responses: 28, trend: "+4%", strength: "Participación en clase", opportunity: "Ritmo de explicación", priority: "Fortaleza", indicators: [87, 93, 85, 84], recommendation: "Mantener la participación oral y alternar momentos de práctica guiada con pausas breves para quienes necesitan consolidar vocabulario.", comments: [{ category: "Reconocimiento", text: "Hace que todos participemos sin miedo a equivocarnos." }, { category: "Sugerencia", text: "Podría repetir un poco más despacio las instrucciones largas." }, { category: "Experiencia de aula", text: "Los juegos y conversaciones hacen más fácil aprender." }] },
-  { name: "Mtra. Sofía Fernández", subject: "Historia", score: 4.2, positive: 84, responses: 27, trend: "+3%", strength: "Relación entre temas", opportunity: "Variedad de recursos", priority: "Seguimiento", indicators: [88, 91, 79, 80], recommendation: "Mantener la conexión entre hechos y contextos actuales, e incorporar mapas, líneas de tiempo o fuentes breves para diversificar la comprensión.", comments: [{ category: "Reconocimiento", text: "Relaciona los temas y ayuda a entender por qué sucedieron." }, { category: "Sugerencia", text: "Me ayudarían más mapas y líneas del tiempo." }, { category: "Experiencia de aula", text: "Los debates hacen que recordemos mejor los temas." }] },
-  { name: "Mtro. Ricardo Morales", subject: "Tecnología", score: 4.0, positive: 80, responses: 25, trend: "+1%", strength: "Aplicación práctica", opportunity: "Instrucciones por etapas", priority: "Seguimiento", indicators: [79, 89, 78, 76], recommendation: "Dividir los proyectos en entregas breves con criterios visibles y comprobar que todo el grupo comprenda el siguiente paso antes de avanzar.", comments: [{ category: "Reconocimiento", text: "Aprendemos haciendo proyectos que sí podemos usar." }, { category: "Sugerencia", text: "Quisiera que las instrucciones de los proyectos estuvieran por pasos." }, { category: "Experiencia de aula", text: "Trabajar en equipo ayuda cuando una herramienta es nueva." }] },
-  { name: "Mtra. Diana Vázquez", subject: "Artes", score: 4.5, positive: 89, responses: 26, trend: "+5%", strength: "Libertad para crear", opportunity: "Criterios de evaluación", priority: "Fortaleza", indicators: [90, 96, 82, 90], recommendation: "Conservar el ambiente creativo y presentar ejemplos sencillos de los criterios antes de cada proyecto para dar mayor certeza al evaluar.", comments: [{ category: "Reconocimiento", text: "Podemos expresar ideas diferentes sin que estén mal." }, { category: "Sugerencia", text: "Me gustaría conocer mejor cómo se calificará cada trabajo." }, { category: "Experiencia de aula", text: "Me siento con confianza para mostrar lo que hago." }] },
-];
 
 function Choice({
   emoji,
@@ -369,24 +316,51 @@ export default function Home() {
   }, [filters.grade, filters.group]);
   const scopeLabel = [filters.cycle, filters.grade, filters.group, filters.area].join(" · ");
   const activeResultTab = resultTabs.find((tab) => tab.id === dashboardTab) ?? resultTabs[0];
-  const cycleAdjustment = filters.cycle === "2025–2026" ? -2 : 0;
-  const areaAdjustment = filters.area === "Psicología" ? 2 : filters.area === "Enfermería" ? -1 : filters.area === "Tutoría" || filters.area === "Docentes" ? 1 : 0;
-  const scopeAdjustment = cycleAdjustment + areaAdjustment + (filters.grade === "Todos los grados" ? 0 : filters.grade.includes("preparatoria") ? 2 : -1) + (filters.group === "Grupo B" ? -3 : filters.group === "Grupo C" ? 2 : 0);
+  /* -----------------------------------------------------------------------
+     Todas las vistas del panel se agregan de un único conjunto de respuestas.
+     Antes cada pestaña calculaba lo suyo por separado —hash del nombre para
+     docentes, rampa lineal para la matriz, literales para apoyo y reporte— y
+     las cifras no podían respaldarse entre sí. Ahora la coherencia entre
+     pestañas es una propiedad del cálculo, no algo que haya que vigilar.
+     ----------------------------------------------------------------------- */
+  const dataset = useMemo(() => buildDataset(studentUniverse, responseCount), [studentUniverse, responseCount]);
+  // El ciclo anterior es otra aplicación completa del instrumento, no el
+  // resultado actual menos dos puntos: así el comparativo también puede
+  // empeorar, que antes era imposible por construcción.
+  const previousDataset = useMemo(() => buildDataset(studentUniverse, responseCount, 0x5c1e), [studentUniverse, responseCount]);
+  const results = useMemo(
+    () => aggregate(dataset, { grade: filters.grade, group: filters.group }),
+    [dataset, filters.grade, filters.group],
+  );
+  const previousResults = useMemo(
+    () => aggregate(previousDataset, { grade: filters.grade, group: filters.group }),
+    [previousDataset, filters.grade, filters.group],
+  );
   const exportScopeSlug = [filters.cycle, filters.grade, filters.group, filters.area].join("-").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9-]+/g, "-").replace(/-+/g, "-");
-  const gradeFactor = filters.grade === "Todos los grados" ? 1 : 0.55;
-  const groupFactor = filters.group === "Todos los grupos" ? 1 : 0.55;
-  const scopedUniverse = Math.max(1, Math.round(studentUniverse * gradeFactor * groupFactor));
-  const baseResponseRate = studentUniverse > 0 ? responseCount / studentUniverse : 0;
-  const scopedResponseRate = Math.max(0, Math.min(1, baseResponseRate + cycleAdjustment / 100));
-  const scopedResponseCount = Math.min(scopedUniverse, Math.round(scopedUniverse * scopedResponseRate));
-  const positiveExperience = Math.max(60, 84 + scopeAdjustment);
-  const scopedTeacherAnalysis = resultTeachers.map(buildTeacherAnalysis).map((item) => ({
-    ...item,
-    score: Math.max(1, Math.min(5, Number((item.score + scopeAdjustment / 20).toFixed(1)))),
-    positive: Math.max(0, Math.min(100, item.positive + scopeAdjustment)),
-    responses: Math.max(1, Math.min(scopedResponseCount, Math.round(item.responses * gradeFactor * groupFactor))),
-    indicators: item.indicators.map((value) => Math.max(0, Math.min(100, value + scopeAdjustment))),
-  }));
+  const scopedUniverse = results.universe;
+  const scopedResponseCount = results.responseCount;
+  const positiveExperience = results.favorablePct;
+  const experienceIndex = results.experienceIndex;
+  // Los cuatro indicadores de la ficha docente dejan de ser números sueltos:
+  // cada uno es el agregado real de la dimensión del instrumento que lo mide.
+  const indicatorDimensions = ["Dominio y claridad", "Convivencia y respeto", "Planeación y evaluación", "Acompañamiento"];
+  const previousByTeacher = new Map(previousResults.teachers.map((teacher) => [teacher.code, teacher]));
+  const scopedTeacherAnalysis = results.teachers.map((teacher) => {
+    const previous = previousByTeacher.get(teacher.code);
+    const delta = previous ? teacher.index - previous.index : 0;
+    return {
+      ...teacher,
+      // Promedio 1–7 tal como responden los alumnos; menor es mejor.
+      average: teacher.average,
+      positive: teacher.favorablePct,
+      trend: `${delta >= 0 ? "+" : ""}${delta}%`,
+      indicators: indicatorDimensions.map(
+        (dimension) => teacher.dimensions.find((entry) => entry.dimension === dimension)?.index ?? teacher.index,
+      ),
+      recommendation: `Conservar lo que sostiene ${teacher.strength.toLocaleLowerCase("es-MX")} y acordar una mejora observable en ${teacher.opportunity.toLocaleLowerCase("es-MX")}, con seguimiento durante el siguiente periodo.`,
+      comments: [] as { category: string; text: string }[],
+    };
+  });
   const analysisTeacherMatches = scopedTeacherAnalysis
     .map((teacher, index) => ({ teacher, index }))
     .filter(({ teacher }) => teacher.name.toLocaleLowerCase("es-MX").includes(analysisTeacherSearch.trim().toLocaleLowerCase("es-MX")));
@@ -397,93 +371,101 @@ export default function Home() {
   const preliminaryAnalysisTeachers = analysisTeacherSearch.trim()
     ? analysisTeacherMatches.slice(0, 5)
     : [{ teacher: scopedTeacherAnalysis[selectedAnalysisTeacher], index: selectedAnalysisTeacher }, ...rotatedAnalysisTeachers.filter(({ index }) => index !== selectedAnalysisTeacher)].filter(({ teacher }) => Boolean(teacher)).slice(0, 5);
-  const teacherMatrix = teacherQuestions.map((question, questionIndex) => {
-    const responseBase = Math.max(1, Math.min(scopedResponseCount, Math.round(scopedResponseCount * (0.94 + (questionIndex % 4) * 0.01))));
-    const average = Number(Math.max(1, Math.min(7, 1.55 + questionIndex * 0.075 - scopeAdjustment / 35)).toFixed(2));
-    const performanceIndex = Math.round(((7 - average) / 6) * 100);
-    const favorable = Math.max(0, Math.min(responseBase, Math.round(responseBase * (performanceIndex / 100 + 0.08))));
-    const critical = Math.max(0, Math.min(responseBase - favorable, Math.round(responseBase * Math.max(0.02, (100 - performanceIndex) / 250))));
-    return { ...question, responses: responseBase, average, performanceIndex, favorable, critical, level: performanceIndex >= 75 ? "Fortaleza" : performanceIndex >= 50 ? "Atención" : "Área prioritaria" };
-  });
-  const dimensionMatrix = teacherDimensions.map((dimension) => {
-    const rows = teacherMatrix.filter((row) => row.dimension === dimension);
-    const average = Number((rows.reduce((total, row) => total + row.average, 0) / rows.length).toFixed(2));
-    const performanceIndex = Math.round(rows.reduce((total, row) => total + row.performanceIndex, 0) / rows.length);
-    return { dimension, questions: rows.length, average, performanceIndex, level: performanceIndex >= 75 ? "Fortaleza" : performanceIndex >= 50 ? "Atención" : "Área prioritaria" };
-  });
-  const supportAreaAnalysis = [
-    { area: "Dirección y coordinación", icon: "🧭", accent: "purple", questions: [
-      { label: "Organización y cumplimiento", text: "Cumple los acuerdos y organiza bien las actividades de la escuela.", positive: 82 },
-      { label: "Comunicación", text: "Explica con claridad las decisiones, reglas y cambios importantes.", positive: 77 },
-      { label: "Escucha estudiantil", text: "Escucha a los estudiantes y toma en cuenta lo que pensamos.", positive: 75 },
-      { label: "Respeto y trato justo", text: "Nos trata con respeto y busca soluciones justas.", positive: 81 },
-      { label: "Seguimiento", text: "Da seguimiento a los problemas hasta que se resuelven.", positive: 74 },
-    ]},
-    { area: "Psicología", icon: "🧠", accent: "gold", questions: [
-      { label: "Escucha", text: "Me escuchó con atención y sin juzgarme.", positive: 89 },
-      { label: "Confianza", text: "Me hizo sentir en confianza para hablar de lo que me preocupaba.", positive: 87 },
-      { label: "Orientación útil", text: "Su orientación me ayudó a saber qué podía hacer después.", positive: 84 },
-    ]},
-    { area: "Enfermería", icon: "🩺", accent: "cyan", questions: [
-      { label: "Atención", text: "Me atendió con amabilidad y tomó en serio lo que sentía.", positive: 91 },
-      { label: "Indicaciones claras", text: "Me explicó claramente qué debía hacer.", positive: 87 },
-      { label: "Seguimiento", text: "Me indicó cuándo debía regresar o pedir más ayuda.", positive: 83 },
-    ]},
-    { area: "Tutoría", icon: "🤝", accent: "blue", questions: [
-      { label: "Escucha", text: "Me escucha cuando tengo una dificultad.", positive: 86 },
-      { label: "Orientación", text: "Me ayuda a encontrar una solución o el apoyo que necesito.", positive: 82 },
-      { label: "Interés integral", text: "Se interesa por cómo estamos, no solo por las calificaciones.", positive: 83 },
-    ]},
-  ].map((area) => {
-    const questions = area.questions.map((question) => ({ ...question, positive: Math.max(0, Math.min(100, question.positive + scopeAdjustment)) }));
-    return { ...area, questions, average: Math.round(questions.reduce((total, question) => total + question.positive, 0) / questions.length) };
-  });
+  // La matriz agrega las MISMAS respuestas que alimentan el comparativo
+  // docente, así que ambos promedios reconcilian. Antes era `1.55 + índice *
+  // 0.075`, una escalera donde la pregunta 1 salía siempre la mejor y la 15
+  // siempre la peor, en cualquier grado, grupo y ciclo.
+  const teacherMatrix = results.questions;
+  const dimensionMatrix = results.dimensions;
+  // Las áreas de apoyo se agregan de las respuestas reales al mismo bloque de
+  // preguntas que hace el test (los id coinciden con los del formulario), en
+  // lugar de los porcentajes escritos a mano que había antes.
+  const supportAreaAnalysis = results.support;
   const visibleSupportAreas = filters.area === "Todas las áreas" || filters.area === "Docentes" ? supportAreaAnalysis : supportAreaAnalysis.filter((area) => area.area === filters.area);
   const focusedSupportArea = visibleSupportAreas[selectedSupportArea] ?? visibleSupportAreas[0] ?? supportAreaAnalysis[0];
   const focusedTeacher = scopedTeacherAnalysis[selectedAnalysisTeacher] ?? scopedTeacherAnalysis[0];
-  const participationRate = scopedUniverse > 0 ? Math.min(100, Math.round((scopedResponseCount / scopedUniverse) * 100)) : 0;
-  const analysisReady = participationRate > 50 && scopedResponseCount >= 10;
-  const responsesNeeded = Math.max(0, Math.floor(scopedUniverse * 0.5) + 1 - scopedResponseCount);
-  const reportIndicators = [
-    { indicator: "Respeto", value: 91 + scopeAdjustment, reading: "Fortaleza consolidada" },
-    { indicator: "Seguridad", value: 88 + scopeAdjustment, reading: "Fortaleza" },
-    { indicator: "Acceso a ayuda", value: 79 + scopeAdjustment, reading: "Seguimiento" },
-    { indicator: "Escucha estudiantil", value: 72 + scopeAdjustment, reading: "Oportunidad prioritaria" },
-  ];
-  const cycleComparison = reportIndicators.map((item) => ({ indicator: item.indicator, current: item.value, previous: item.value - (item.indicator === "Escucha estudiantil" ? 4 : 2), delta: item.indicator === "Escucha estudiantil" ? 4 : 2 }));
+  const participationRate = results.participationRate;
+  const analysisReady = results.analysisReady;
+  const responsesNeeded = results.responsesNeeded;
+  // Cada indicador corresponde a un reactivo que el test realmente hace. Se
+  // retiró "Respeto", que encabezaba el reporte con 91% pero que el
+  // instrumento nunca pregunta: un indicador sin reactivo que lo respalde es
+  // exactamente lo que no debe llegar a una decisión directiva.
+  const reportIndicators = results.indicators;
+  const previousIndicators = new Map(previousResults.indicators.map((item) => [item.id, item]));
+  const cycleComparison = reportIndicators.map((item) => {
+    const previous = previousIndicators.get(item.id);
+    const previousValue = previous?.value ?? item.value;
+    return { indicator: item.indicator, current: item.value, previous: previousValue, delta: item.value - previousValue };
+  });
   const reportPlan = [
     { period: "0–15 días", action: "Validar patrones y revisar reportes individuales de forma privada.", owner: "Coordinación", evidence: "Minuta y prioridades validadas" },
     { period: "15–30 días", action: "Acordar una práctica observable de retroalimentación y escucha.", owner: "Docentes y tutoría", evidence: "Acuerdos y responsables" },
     { period: "30–60 días", action: "Dar seguimiento, comunicar avances y realizar una escucha breve.", owner: "Dirección", evidence: "Comparativo y comunicación" },
   ];
-  const voiceProfiles: Record<string, { recognition: string[]; suggestions: string[]; focus: string; action: string }> = {
-    "Todas las áreas": { recognition: ["Explican de distintas maneras hasta que entendemos.", "Nos dan confianza para participar sin burlas."], suggestions: ["Nos ayudaría saber con más claridad cómo mejorar.", "Quisiéramos más actividades prácticas."], focus: "La claridad y el respeto sostienen la experiencia positiva.", action: "Responder públicamente a dos propuestas viables." },
-    "Docentes": { recognition: ["Las explicaciones con ejemplos facilitan comprender los temas.", "Podemos participar sin miedo a equivocarnos."], suggestions: ["Necesitamos saber qué hicimos bien y qué debemos mejorar.", "Nos ayudarían más ejercicios prácticos durante la clase."], focus: "La explicación y el trato son las fortalezas docentes más visibles.", action: "Acordar una práctica común de retroalimentación docente." },
-    "Tutoría": { recognition: ["En tutoría podemos hablar de lo que nos preocupa.", "La tutora busca soluciones cuando el grupo lo necesita."], suggestions: ["Quisiéramos conocer el seguimiento de nuestros acuerdos.", "Nos gustaría tener más espacios breves para hablar del grupo."], focus: "El acompañamiento cercano es la fortaleza principal de tutoría.", action: "Publicar y revisar los acuerdos de grupo cada quince días." },
-    "Dirección y coordinación": { recognition: ["Cuando planteamos un problema buscan una solución justa.", "La coordinación escucha al grupo cuando necesitamos apoyo."], suggestions: ["Quisiéramos saber qué seguimiento reciben nuestras propuestas.", "Sería útil comunicar con más claridad los acuerdos y cambios."], focus: "La búsqueda de soluciones justas es la principal fortaleza directiva.", action: "Publicar acuerdos, responsables y avances de las solicitudes estudiantiles." },
-    "Psicología": { recognition: ["Me escuchan con respeto cuando necesito orientación.", "Sé que puedo pedir apoyo sin ser juzgado."], suggestions: ["Sería útil recordar cómo solicitar una cita de forma privada.", "Quisiéramos más actividades para manejar el estrés."], focus: "La confianza para solicitar apoyo distingue al área de psicología.", action: "Reforzar la ruta confidencial de atención y sus tiempos." },
-    "Enfermería": { recognition: ["Me atienden con amabilidad cuando me siento mal.", "Explican claramente qué cuidados debo seguir."], suggestions: ["Necesitamos saber cuándo está disponible el servicio.", "Sería útil recibir más información preventiva."], focus: "El trato y la claridad de los cuidados son las fortalezas del servicio.", action: "Hacer visibles horarios, ruta de atención y consejos preventivos." },
+  // El hallazgo principal y la acción prioritaria del reporte se derivan de
+  // las dimensiones con mejor y peor resultado. Antes eran textos enlatados
+  // por área: conclusiones redactadas de antemano, sin relación con lo que
+  // hubieran contestado los alumnos.
+  const rankedDimensions = [...results.dimensions].sort((a, b) => b.performanceIndex - a.performanceIndex);
+  const strongestDimension = rankedDimensions[0];
+  const priorityDimension = rankedDimensions[rankedDimensions.length - 1];
+  const voiceProfile = {
+    focus: strongestDimension && priorityDimension
+      ? `${strongestDimension.dimension} sostiene el resultado (índice ${strongestDimension.performanceIndex}); ${priorityDimension.dimension} concentra la mayor oportunidad (índice ${priorityDimension.performanceIndex}).`
+      : "Aún no hay respuestas suficientes para una lectura.",
+    action: priorityDimension
+      ? `Acordar una mejora observable en ${priorityDimension.dimension.toLocaleLowerCase("es-MX")} y darle seguimiento durante el periodo.`
+      : "Sin datos suficientes para recomendar una acción.",
   };
-  const voiceProfile = voiceProfiles[filters.area] ?? voiceProfiles["Todas las áreas"];
-  const voiceMention = (base: number) => Math.min(scopedResponseCount, Math.max(1, Math.round(base * gradeFactor * groupFactor + scopeAdjustment)));
-  const voiceThemes = [
-    { label: "Explicaciones claras", mentions: voiceMention(filters.area === "Psicología" ? 31 : filters.area === "Enfermería" ? 35 : 42), reading: "Fortaleza", action: "Mantener estrategias de explicación variadas." },
-    { label: "Trato respetuoso", mentions: voiceMention(filters.area === "Psicología" ? 44 : 38), reading: "Fortaleza", action: "Conservar ambientes seguros para participar." },
-    { label: filters.area === "Enfermería" ? "Información preventiva" : filters.area === "Psicología" ? "Manejo del estrés" : "Más actividades", mentions: voiceMention(27), reading: "Solicitud", action: "Incorporar experiencias prácticas y aplicadas." },
-    { label: filters.area === "Tutoría" ? "Seguimiento de acuerdos" : "Escuchar al grupo", mentions: voiceMention(21), reading: "Seguimiento", action: "Comunicar qué propuestas se atendieron." },
-    { label: filters.area === "Enfermería" ? "Disponibilidad del servicio" : filters.area === "Psicología" ? "Acceso a orientación" : "Retroalimentación", mentions: voiceMention(18), reading: "Solicitud", action: "Indicar el siguiente paso de forma clara y oportuna." },
-  ];
-  const reservedVoiceCount = Math.min(scopedResponseCount, Math.max(0, Math.round(3 * gradeFactor * groupFactor + (filters.area === "Psicología" ? 1 : 0))));
-  const voiceComments = [
-    ...voiceProfile.recognition.map((text) => ({ category: "Reconocimiento", text })),
-    ...voiceProfile.suggestions.map((text) => ({ category: "Sugerencia", text })),
-    ...(reservedVoiceCount ? [{ category: "Reservado", text: `${reservedVoiceCount} comentario${reservedVoiceCount === 1 ? "" : "s"} canalizado${reservedVoiceCount === 1 ? "" : "s"} al equipo responsable; contenido omitido por confidencialidad.` }] : []),
-  ];
-  const channelTotal = Math.max(1, Math.min(scopedResponseCount, Math.round(58 * gradeFactor * groupFactor + scopeAdjustment)));
-  const channelGreen = Math.round(channelTotal * 0.62);
-  const channelYellow = Math.round(channelTotal * 0.27);
-  const channelOrange = Math.round(channelTotal * 0.08);
-  const channelRed = Math.max(0, channelTotal - channelGreen - channelYellow - channelOrange);
+
+  /* Voz del alumnado.
+     Los comentarios ya no se generan con plantillas: se leen los que captura
+     el test. Un directivo podía citar en una retroalimentación una frase que
+     ningún alumno escribió, y ese es el riesgo más delicado del panel. */
+  // El semáforo del test ya clasifica la intención de cada comentario, así que
+  // esa misma clasificación decide la columna: no hace falta interpretarla.
+  const realComments = [
+    { column: "recognition", category: "Conservar", text: String(answers.green || "").trim() },
+    { column: "suggestion", category: "Atención", text: String(answers.yellow || "").trim() },
+    { column: "priority", category: "Mejorar", text: String(answers.red || "").trim() },
+    { column: "suggestion", category: "Dirección", text: String(answers.director_comment || "").trim() },
+    { column: "suggestion", category: "Red de apoyo", text: String(answers.support_comment || "").trim() },
+    // La pregunta abierta de cada docente es "Lo mejor de … es", de modo que
+    // sus respuestas pertenecen a reconocimientos.
+    ...teacherCatalog.map((teacher) => ({
+      column: "recognition",
+      category: teacher.subject,
+      text: String(answers[`teacher_${teacher.code}_comment`] || "").trim(),
+    })),
+  ].filter((comment) => comment.text.length > 0);
+
+  // Los temas se sostienen en el dato cuantitativo: cada uno es una dimensión
+  // del instrumento y su magnitud es el número real de respuestas críticas
+  // que la señalan, no un conteo inventado de menciones.
+  const voiceThemes = [...results.dimensions]
+    .sort((a, b) => a.performanceIndex - b.performanceIndex)
+    .slice(0, 5)
+    .map((dimension) => {
+      const rows = results.questions.filter((question) => question.dimension === dimension.dimension);
+      return {
+        label: dimension.dimension,
+        mentions: rows.reduce((total, question) => total + question.critical, 0),
+        reading: dimension.level,
+        action: dimension.level === "Fortaleza"
+          ? "Conservar y compartir la práctica con el resto del equipo."
+          : "Acordar una mejora observable y darle seguimiento en el periodo.",
+      };
+    });
+  const voiceComments = realComments;
+
+  // El semáforo cuenta comentarios reales por categoría.
+  const channelGreen = realComments.filter((comment) => comment.category === "Conservar").length;
+  const channelYellow = realComments.filter((comment) => comment.category === "Atención").length;
+  const channelRed = realComments.filter((comment) => comment.category === "Mejorar").length;
+  const channelOrange = Math.max(0, realComments.length - channelGreen - channelYellow - channelRed);
+  const channelTotal = Math.max(1, realComments.length);
+  const reservedVoiceCount = 0;
   const channelData = [
     { level: "Verde", label: "Fortalezas", count: channelGreen, percentage: channelGreen / channelTotal, interpretation: "Prácticas valoradas que conviene conservar y compartir.", route: "Documentar buenas prácticas" },
     { level: "Amarillo", label: "Oportunidades", count: channelYellow, percentage: channelYellow / channelTotal, interpretation: "Sugerencias recurrentes que pueden atenderse con ajustes concretos.", route: "Asignar responsable y fecha" },
@@ -493,9 +475,9 @@ export default function Home() {
   const strongestIndicator = [...reportIndicators].sort((a, b) => b.value - a.value)[0];
   const priorityIndicator = [...reportIndicators].sort((a, b) => a.value - b.value)[0];
   const priorityVoiceTheme = [...voiceThemes].filter((theme) => theme.reading !== "Fortaleza").sort((a, b) => b.mentions - a.mentions)[0];
-  const teacherAverage = (scopedTeacherAnalysis.reduce((total, item) => total + item.score, 0) / scopedTeacherAnalysis.length).toFixed(1);
+  const teacherAverage = (scopedTeacherAnalysis.reduce((total, item) => total + item.average, 0) / scopedTeacherAnalysis.length).toFixed(1);
   const areaReportReading = filters.area === "Docentes"
-    ? `El promedio docente es ${teacherAverage}/5. ${focusedTeacher.strength} destaca como fortaleza y ${focusedTeacher.opportunity.toLowerCase()} requiere seguimiento.`
+    ? `El promedio docente es ${teacherAverage}/7. ${focusedTeacher.strength} destaca como fortaleza y ${focusedTeacher.opportunity.toLowerCase()} requiere seguimiento.`
     : filters.area === "Dirección y coordinación"
       ? "La disposición para escuchar y buscar soluciones es favorable; la oportunidad es comunicar con claridad qué acuerdos se tomaron y cómo se dará seguimiento."
     : filters.area === "Psicología"
@@ -504,7 +486,7 @@ export default function Home() {
         ? "El trato y la claridad del cuidado son favorables; la disponibilidad del servicio y la información preventiva concentran las solicitudes."
         : filters.area === "Tutoría"
           ? "El acompañamiento cercano es valorado; la prioridad es hacer visible el seguimiento de acuerdos y solicitudes del grupo."
-          : `La experiencia combina fortalezas institucionales y docentes. El promedio docente es ${teacherAverage}/5 y la escucha continúa como oportunidad transversal.`;
+          : `La experiencia combina fortalezas institucionales y docentes. El promedio docente es ${teacherAverage}/7 y la escucha continúa como oportunidad transversal.`;
   const institutionalReport = {
     title: filters.area === "Todas las áreas" ? "Interpretación de la experiencia estudiantil" : `Interpretación de resultados · ${filters.area}`,
     finding: `${positiveExperience}% de experiencia positiva en ${scopedResponseCount} respuestas válidas. ${strongestIndicator.indicator} (${strongestIndicator.value}%) es el indicador más sólido del alcance.`,
@@ -789,7 +771,7 @@ export default function Home() {
       const pageHeight = 210;
       const scope = `${filters.cycle} · ${filters.grade} · ${filters.group} · ${matrixExportTeacher === "general" ? "Todos los docentes" : matrixExportTeacher}`;
       const totalResponses = selectedTeachers.reduce((sum, teacher) => sum + teacher.responses, 0);
-      const average = selectedTeachers.length ? selectedTeachers.reduce((sum, teacher) => sum + teacher.score, 0) / selectedTeachers.length : 0;
+      const average = selectedTeachers.length ? selectedTeachers.reduce((sum, teacher) => sum + teacher.average, 0) / selectedTeachers.length : 0;
       const positive = selectedTeachers.length ? Math.round(selectedTeachers.reduce((sum, teacher) => sum + teacher.positive, 0) / selectedTeachers.length) : 0;
       const readingColor = (value: number) => value >= 75 ? green : value >= 50 ? amber : red;
       const dimensionRows = teacherDimensions.map((dimension) => {
@@ -859,7 +841,7 @@ export default function Home() {
       autoTable(pdf, {
         startY: 46, margin: { left: 14, right: 14, bottom: 16 },
         head: [["Docente", "Materia", "Evaluaciones", "Promedio", "Índice", "Fortaleza", "Oportunidad", "Estado"]],
-        body: selectedTeachers.map((teacher) => [teacher.name, teacher.subject, teacher.responses, teacher.score.toFixed(1), `${teacher.positive}%`, teacher.strength, teacher.opportunity, evaluationReading(teacher.positive)]),
+        body: selectedTeachers.map((teacher) => [teacher.name, teacher.subject, teacher.responses, teacher.average.toFixed(1), `${teacher.positive}%`, teacher.strength, teacher.opportunity, evaluationReading(teacher.positive)]),
         theme: "grid", headStyles: { fillColor: blue, textColor: 255 }, alternateRowStyles: { fillColor: [247, 249, 252] },
         styles: { fontSize: 6.4, cellPadding: 2, lineColor: [222, 227, 237], lineWidth: .12 },
         columnStyles: { 0: { cellWidth: 48 }, 1: { cellWidth: 31 }, 2: { cellWidth: 22, halign: "center" }, 3: { cellWidth: 20, halign: "center" }, 4: { cellWidth: 20, halign: "center", fontStyle: "bold" }, 5: { cellWidth: 39 }, 6: { cellWidth: 43 }, 7: { cellWidth: 28 } },
@@ -923,24 +905,12 @@ export default function Home() {
         const negative = Math.max(0, total - veryPositive - positiveCount - neutral);
         return { veryPositive, positiveCount, neutral, negative };
       };
+      // El Excel se arma con las mismas agregaciones que ve el directivo en
+      // pantalla. Antes esta tabla repetía el instrumento con porcentajes
+      // escritos a mano, así que el archivo podía contradecir al panel.
       const surveyQuestions = [
-        { section: "Experiencia IMMA", code: "imma_safe", question: "Me siento seguro/a dentro del IMMA.", positive: 88 + scopeAdjustment },
-        { section: "Experiencia IMMA", code: "imma_heard", question: "Siento que mi opinión es tomada en cuenta.", positive: 72 + scopeAdjustment },
-        { section: "Experiencia IMMA", code: "imma_help", question: "Sé con quién pedir ayuda cuando la necesito.", positive: 79 + scopeAdjustment },
-        { section: "Dirección", code: "director_agreements", question: "Cumple los acuerdos y organiza bien las actividades de la escuela.", positive: 82 + scopeAdjustment },
-        { section: "Dirección", code: "director_communication", question: "Explica con claridad las decisiones, reglas y cambios importantes.", positive: 77 + scopeAdjustment },
-        { section: "Dirección", code: "director_listens", question: "Escucha a los estudiantes y toma en cuenta lo que pensamos.", positive: 75 + scopeAdjustment },
-        { section: "Dirección", code: "director_fair", question: "Nos trata con respeto y busca soluciones justas.", positive: 81 + scopeAdjustment },
-        { section: "Dirección", code: "director_followup", question: "Da seguimiento a los problemas hasta que se resuelven.", positive: 74 + scopeAdjustment },
-        { section: "Psicología", code: "psych_listens", question: "Me escuchó con atención y sin juzgarme.", positive: 89 + scopeAdjustment },
-        { section: "Psicología", code: "psych_safe", question: "Me hizo sentir en confianza para hablar de lo que me preocupaba.", positive: 87 + scopeAdjustment },
-        { section: "Psicología", code: "psych_useful", question: "Su orientación me ayudó a saber qué podía hacer después.", positive: 84 + scopeAdjustment },
-        { section: "Enfermería", code: "nurse_care", question: "Me atendió con amabilidad y tomó en serio lo que sentía.", positive: 91 + scopeAdjustment },
-        { section: "Enfermería", code: "nurse_clear", question: "Me explicó claramente qué debía hacer.", positive: 87 + scopeAdjustment },
-        { section: "Enfermería", code: "nurse_followup", question: "Me indicó cuándo debía regresar o pedir más ayuda.", positive: 83 + scopeAdjustment },
-        { section: "Tutoría", code: "tutor_listens", question: "Me escucha cuando tengo una dificultad.", positive: 86 + scopeAdjustment },
-        { section: "Tutoría", code: "tutor_guidance", question: "Me ayuda a encontrar una solución o el apoyo que necesito.", positive: 82 + scopeAdjustment },
-        { section: "Tutoría", code: "tutor_cares", question: "Se interesa por cómo estamos, no sólo por las calificaciones.", positive: 83 + scopeAdjustment },
+        ...results.indicators.map((item) => ({ section: "Experiencia IMMA", code: item.id, question: item.text, positive: item.value })),
+        ...results.support.flatMap((area) => area.questions.map((item) => ({ section: area.area, code: item.id, question: item.text, positive: item.positive }))),
       ];
       const surveyRows = surveyQuestions.map((item) => {
         const distribution = scaleDistribution(Math.max(0, Math.min(100, item.positive)));
@@ -972,7 +942,7 @@ export default function Home() {
         { Campo: "Nota", Resultado: "Datos anónimos de demostración; no permiten identificar estudiantes." },
       ], [27, 88], ["Resultado"]);
       addSheet("Indicadores", reportIndicators.map((item) => ({ Ciclo: filters.cycle, Grado: filters.grade, Grupo: filters.group, Área: filters.area, Indicador: item.indicator, Resultado: item.value / 100, Lectura: item.reading })), [15, 24, 16, 18, 28, 14, 28], ["Resultado"]);
-      addSheet("Docentes", scopedTeacherAnalysis.map((item) => ({ Ciclo: filters.cycle, Grado: filters.grade, Grupo: filters.group, Docente: item.name, Materia: item.subject, Evaluaciones: item.responses, Promedio: item.score, "Experiencias positivas": item.positive / 100, Tendencia: item.trend, Fortaleza: item.strength, Oportunidad: item.opportunity, Recomendación: item.recommendation, Estado: item.priority })), [15, 24, 16, 28, 18, 14, 12, 20, 12, 28, 34, 62, 16], ["Experiencias positivas"]);
+      addSheet("Docentes", scopedTeacherAnalysis.map((item) => ({ Ciclo: filters.cycle, Grado: filters.grade, Grupo: filters.group, Docente: item.name, Materia: item.subject, Evaluaciones: item.responses, Promedio: item.average, "Experiencias positivas": item.positive / 100, Tendencia: item.trend, Fortaleza: item.strength, Oportunidad: item.opportunity, Recomendación: item.recommendation, Estado: item.priority })), [15, 24, 16, 28, 18, 14, 12, 20, 12, 28, 34, 62, 16], ["Experiencias positivas"]);
       addSheet("Comentarios docentes", scopedTeacherAnalysis.flatMap((item) => item.comments.map((comment) => ({ Ciclo: filters.cycle, Grado: filters.grade, Grupo: filters.group, Área: filters.area, Docente: item.name, Materia: item.subject, Clasificación: comment.category, Comentario: comment.text, Tratamiento: "Anonimizado" }))), [15, 24, 16, 18, 28, 18, 20, 72, 16]);
       addSheet("Respuestas encuesta", surveyRows, [15, 24, 16, 18, 20, 22, 58, 16, 15, 13, 12, 16, 18, 16], ["Resultado positivo"]);
       addSheet("Indicadores docentes", teacherIndicatorRows, [15, 24, 16, 28, 18, 28, 14, 24], ["Resultado"]);
@@ -1045,7 +1015,7 @@ export default function Home() {
       pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.2); pdf.setTextColor(65); pdf.text(pdf.splitTextToSize(`${institutionalReport.finding} ${institutionalReport.opportunity}`, 170), 19, y + 13);
       y += 32;
       pdf.setFontSize(9); pdf.setTextColor(...navy); pdf.setFont("helvetica", "bold"); pdf.text("Comparativo docente", 14, y);
-      autoTable(pdf, { startY: y + 4, margin: { left: 14, right: 14 }, head: [["Docente / materia", "Eval.", "Prom.", "% +", "Estado"]], body: scopedTeacherAnalysis.map((item) => [`${item.name} · ${item.subject}`, item.responses, item.score, `${item.positive}%`, item.priority]), theme: "striped", headStyles: { fillColor: blue }, styles: { fontSize: 6.8, cellPadding: 2 }, columnStyles: { 1: { halign: "center", cellWidth: 16 }, 2: { halign: "center", cellWidth: 18 }, 3: { halign: "center", cellWidth: 18 }, 4: { cellWidth: 28 } } });
+      autoTable(pdf, { startY: y + 4, margin: { left: 14, right: 14 }, head: [["Docente / materia", "Eval.", "Prom.", "% +", "Estado"]], body: scopedTeacherAnalysis.map((item) => [`${item.name} · ${item.subject}`, item.responses, item.average, `${item.positive}%`, item.priority]), theme: "striped", headStyles: { fillColor: blue }, styles: { fontSize: 6.8, cellPadding: 2 }, columnStyles: { 1: { halign: "center", cellWidth: 16 }, 2: { halign: "center", cellWidth: 18 }, 3: { halign: "center", cellWidth: 18 }, 4: { cellWidth: 28 } } });
       y = (pdf as typeof pdf & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
       pdf.setFontSize(8.5); pdf.setTextColor(...navy); pdf.setFont("helvetica", "bold"); pdf.text("Voz del alumnado", 14, y);
       const voices = [["Fortaleza", "Explicaciones claras y trato respetuoso"], ["Solicitud", "Más actividades y retroalimentación para mejorar"], ["Reservado", "3 comentarios canalizados de forma confidencial"]];
@@ -1091,7 +1061,7 @@ export default function Home() {
       pdf.setFillColor(teacher.positive >= 75 ? 224 : teacher.positive >= 50 ? 255 : 253, teacher.positive >= 75 ? 245 : teacher.positive >= 50 ? 244 : 233, teacher.positive >= 75 ? 234 : teacher.positive >= 50 ? 218 : 231);
       pdf.roundedRect(153, 42, 36, 10, 5, 5, "F"); pdf.setFont("helvetica", "bold"); pdf.setFontSize(7); pdf.setTextColor(...navy); pdf.text(teacherStatus, 171, 48.5, { align: "center" });
 
-      [["Promedio global / 5", `${teacher.score}`], ["Índice de desempeño", `${teacher.positive}%`], ["Evaluaciones válidas", `${teacher.responses}`], ["Equivalencia matriz / 7", matrixAverageFromIndex(teacher.positive).toFixed(2)]].forEach(([label, value], index) => {
+      [["Promedio global / 5", `${teacher.average}`], ["Índice de desempeño", `${teacher.positive}%`], ["Evaluaciones válidas", `${teacher.responses}`], ["Equivalencia matriz / 7", matrixAverageFromIndex(teacher.positive).toFixed(2)]].forEach(([label, value], index) => {
         const x = 14 + index * 46; pdf.setFillColor(248, 249, 252); pdf.roundedRect(x, 66, 42, 20, 2, 2, "F");
         pdf.setFont("helvetica", "bold"); pdf.setFontSize(11); pdf.setTextColor(...blue); pdf.text(value, x + 4, 75);
         pdf.setFont("helvetica", "normal"); pdf.setFontSize(6.2); pdf.setTextColor(95); pdf.text(label, x + 4, 82);
@@ -1671,7 +1641,9 @@ export default function Home() {
           {dashboardTab === "overview" && <>
           <section className="executive-pulse" aria-label="Lectura ejecutiva de resultados">
             <div className="pulse-heading"><span>Lectura ejecutiva</span><h2>Una institución sólida con una oportunidad clara de escucha</h2><p>El resultado combina alta percepción de respeto y seguridad con una demanda concreta: demostrar cómo se atienden las propuestas del alumnado.</p></div>
-            <div className="pulse-score"><div className="score-orbit"><strong>{positiveExperience}</strong><span>/100</span></div><small>Índice de experiencia</small></div>
+            {/* Compuesto real: docentes, experiencia institucional y áreas de
+                apoyo, todo agregado del mismo conjunto de respuestas. */}
+            <div className="pulse-score"><div className="score-orbit"><strong>{experienceIndex}</strong><span>/100</span></div><small>Índice de experiencia</small></div>
             <div className="pulse-actions"><button onClick={() => setDashboardTab("comments")}><span>01</span><div><strong>Escuchar</strong><small>Revisar temas recurrentes</small></div><b>→</b></button><button onClick={() => setDashboardTab("teachers")}><span>02</span><div><strong>Acompañar</strong><small>Priorizar retroalimentación</small></div><b>→</b></button><button onClick={() => setDashboardTab("report")}><span>03</span><div><strong>Actuar</strong><small>Aplicar el plan de 60 días</small></div><b>→</b></button></div>
           </section>
           <div className="metrics">
@@ -1690,10 +1662,15 @@ export default function Home() {
           <div className="data-grid">
             <article className="chart-card">
               <div className="card-heading"><div><h2>Experiencia general</h2><p>Percepción agrupada del alumnado</p></div><span>Última aplicación</span></div>
-              {[["Me siento respetado/a", 91], ["Me siento seguro/a", 88], ["Sé con quién pedir ayuda", 79], ["Mi opinión es tomada en cuenta", 72]].map(([label, value]) => {
-                const adjusted = Number(value) + scopeAdjustment;
-                return <div className="bar-row" key={label}><div><span>{label}</span><strong>{adjusted}%</strong></div><div className="bar"><i style={{ width: `${adjusted}%` }} /></div></div>;
-              })}
+              {/* Cada barra es un reactivo del test. Había una cuarta, "Me
+                  siento respetado/a" con 91%, que el instrumento nunca
+                  pregunta y encabezaba el reporte ejecutivo. */}
+              {reportIndicators.map((item) => (
+                <div className="bar-row" key={item.id}>
+                  <div><span>{item.text}</span><strong>{item.value}%</strong></div>
+                  <div className="bar"><i style={{ width: `${item.value}%` }} /></div>
+                </div>
+              ))}
             </article>
             <article className="channel-card">
               <div className="channel-heading"><div><h2>Canalización</h2><p>Clasificación preliminar de hallazgos</p></div><button onClick={exportChannelPdf} disabled={Boolean(exporting)} title="Exportar la canalización del alcance seleccionado">{exporting === "channel-pdf" ? "Generando…" : "↓ PDF"}</button></div>
@@ -1706,7 +1683,7 @@ export default function Home() {
             {scopedTeacherAnalysis.slice(0, 5).map((person) => (
               <div className="table-row" key={person.name}>
                 <span><strong>{person.name}</strong><small>{person.subject} · {filters.grade} · {filters.group}</small></span>
-                <span>{person.responses}</span><span>★ {person.score}</span><span>{person.positive}%</span>
+                <span>{person.responses}</span><span>{person.average} <small>/7</small></span><span>{person.positive}%</span>
                 <span><b className={person.priority === "Fortaleza" ? "status-good" : "status-watch"}>{person.priority}</b></span>
               </div>
             ))}
@@ -1715,22 +1692,26 @@ export default function Home() {
           {dashboardTab === "teachers" && (
             <section className="deep-analysis">
               <div className="page-kicker"><span>Vista especializada · Análisis docente</span><strong>{scopeLabel}</strong></div>
-              <div className="analysis-intro"><div><p className="eyebrow">ANÁLISIS PRELIMINAR</p><h2>Lectura docente a profundidad</h2><p>Integra indicadores cuantitativos, tendencias y temas recurrentes de los comentarios anónimos para el alcance seleccionado.</p></div><div className="analysis-score"><strong>{(scopedTeacherAnalysis.reduce((total, item) => total + item.score, 0) / scopedTeacherAnalysis.length).toFixed(1)}</strong><span>Promedio docente</span><small>{scopeAdjustment >= 0 ? "↑" : "↓"} evolución del segmento</small></div></div>
+              <div className="analysis-intro"><div><p className="eyebrow">ANÁLISIS PRELIMINAR</p><h2>Lectura docente a profundidad</h2><p>Integra indicadores cuantitativos, tendencias y temas recurrentes de los comentarios anónimos para el alcance seleccionado.</p></div><div className="analysis-score"><strong>{(scopedTeacherAnalysis.reduce((total, item) => total + item.average, 0) / scopedTeacherAnalysis.length).toFixed(1)}</strong><span>Promedio docente</span><small>{results.institutionIndex >= previousResults.institutionIndex ? "↑" : "↓"} frente al ciclo anterior</small></div></div>
               <div className="teacher-analysis-split">
                 <div className="analysis-ranking">
                   <div className="ranking-head"><strong>Comparativo docente</strong><span>Selecciona para ver el detalle</span></div>
                   <div className={`analysis-teacher-search ${analysisTeacherOpen ? "open" : ""}`}><span aria-hidden="true">⌕</span><input type="text" role="combobox" aria-label="Buscar profesor" aria-expanded={analysisTeacherOpen} aria-controls="analysis-teacher-options" placeholder="Buscar profesor por nombre…" value={analysisTeacherSearch} onFocus={(event) => { event.currentTarget.select(); setAnalysisTeacherOpen(true); }} onClick={() => setAnalysisTeacherOpen(true)} onChange={(event) => { setAnalysisTeacherSearch(event.target.value); setAnalysisTeacherOpen(true); }} onKeyDown={(event) => { if (event.key === "Escape") { setAnalysisTeacherOpen(false); setAnalysisTeacherSearch(""); } }} onBlur={() => setTimeout(() => setAnalysisTeacherOpen(false), 120)} /><b aria-hidden="true">⌄</b>{analysisTeacherOpen && <div id="analysis-teacher-options" className="analysis-teacher-options" role="listbox" onMouseDown={(event) => event.preventDefault()}>{analysisTeacherMatches.map(({ teacher, index }) => <button type="button" role="option" aria-selected={selectedAnalysisTeacher === index} className={selectedAnalysisTeacher === index ? "selected" : ""} key={teacher.code} onClick={() => { setSelectedAnalysisTeacher(index); setAnalysisTeacherSearch(""); setAnalysisTeacherOpen(false); setCommentsExpanded(false); }}><strong>{teacher.name}</strong><small>{teacher.subject}</small></button>)}{analysisTeacherMatches.length === 0 && <p>No se encontraron profesores.</p>}</div>}</div>
                   <div className="analysis-ranking-preview">
                     {preliminaryAnalysisTeachers.map(({ teacher: item, index }, position) => <button key={item.code} className={selectedAnalysisTeacher === index ? "active" : ""} onClick={() => { setSelectedAnalysisTeacher(index); setCommentsExpanded(false); }}>
-                      <span className="rank-number">{position + 1}</span><span className="rank-person"><strong>{item.name}</strong><small>{item.subject}</small></span><span className="rank-score"><strong>{item.score}</strong><small>{item.trend}</small></span><b>›</b>
+                      <span className="rank-number">{position + 1}</span><span className="rank-person"><strong>{item.name}</strong><small>{item.subject}</small></span><span className="rank-score"><strong>{item.average}</strong><small>{item.trend}</small></span><b>›</b>
                     </button>)}
                   </div>
                 </div>
                 <article className={`teacher-detail teacher-tone-${selectedAnalysisTeacher + 1}`}>
                   <div className="detail-head"><div className="detail-avatar">{focusedTeacher.name.split(" ").slice(-1)[0].slice(0,2).toUpperCase()}</div><div><p>REPORTE INDIVIDUAL</p><h2>{focusedTeacher.name}</h2><span>{focusedTeacher.subject} · {focusedTeacher.responses} evaluaciones válidas</span></div><b className={focusedTeacher.priority === "Fortaleza" ? "status-good" : "status-watch"}>{focusedTeacher.priority}</b></div>
-                  <div className="analysis-numbers large"><div><strong>{focusedTeacher.score}</strong><span>Promedio</span></div><div><strong>{focusedTeacher.positive}%</strong><span>Experiencias positivas</span></div><div><strong>{focusedTeacher.trend}</strong><span>Tendencia</span></div></div>
+                  <div className="analysis-numbers large"><div><strong>{focusedTeacher.average}</strong><span>Promedio</span></div><div><strong>{focusedTeacher.positive}%</strong><span>Experiencias positivas</span></div><div><strong>{focusedTeacher.trend}</strong><span>Tendencia</span></div></div>
                   <div className="detail-bars">
-                    {["Claridad al explicar", "Trato respetuoso", "Evaluación justa", "Confianza para preguntar"].map((label, index) => <div key={label}><span>{label}</span><strong>{focusedTeacher.indicators[index]}%</strong><i><b style={{ width: `${focusedTeacher.indicators[index]}%` }} /></i></div>)}
+                    {/* Son índices 0–100 derivados del promedio de cada
+                        dimensión, no el porcentaje de alumnos que respondió
+                        algo: rotularlos con "%" invitaba a leer "100%" como
+                        unanimidad del grupo. */}
+                    {["Claridad al explicar", "Trato respetuoso", "Evaluación justa", "Confianza para preguntar"].map((label, index) => <div key={label}><span>{label}</span><strong>{focusedTeacher.indicators[index]}<small> /100</small></strong><i><b style={{ width: `${focusedTeacher.indicators[index]}%` }} /></i></div>)}
                   </div>
                   <div className="detail-insights"><div className="insight good"><span>✓</span><div><strong>Fortaleza principal</strong><p>{focusedTeacher.strength}</p></div></div><div className="insight improve"><span>↗</span><div><strong>Oportunidad prioritaria</strong><p>{focusedTeacher.opportunity}</p></div></div></div>
                   <div className="teacher-recommendation"><strong>Recomendación específica</strong><p>{focusedTeacher.recommendation}</p></div>
@@ -1796,7 +1777,27 @@ export default function Home() {
               <div className="voice-summary"><article><span>Lectura principal</span><strong>{voiceProfile.focus}</strong><p>Corresponde únicamente a {scopeLabel}.</p></article><article><span>Petición más recurrente</span><strong>{voiceThemes.filter((theme) => theme.reading !== "Fortaleza").sort((a, b) => b.mentions - a.mentions)[0].label}</strong><p>{voiceThemes.filter((theme) => theme.reading !== "Fortaleza").sort((a, b) => b.mentions - a.mentions)[0].action}</p></article><article><span>Decisión sugerida</span><strong>{voiceProfile.action}</strong><p>Mostrar seguimiento fortalece la percepción de escucha.</p></article></div>
               <div className="theme-cloud">{voiceThemes.map((theme) => <span key={theme.label}>{theme.label} <b>{theme.mentions}</b></span>)}</div>
               <button type="button" className="details-toggle" onClick={() => setVoiceDetailOpen((current) => !current)}>{voiceDetailOpen ? "Ocultar comentarios" : "Ver comentarios clasificados"}<b>{voiceDetailOpen ? "↑" : "↓"}</b></button>
-              {voiceDetailOpen && <><div className="comment-columns"><article><h3>🌟 Reconocimientos</h3>{voiceComments.filter((comment) => comment.category === "Reconocimiento").map((comment) => <blockquote key={comment.text}>“{comment.text}”</blockquote>)}</article><article><h3>🔧 Sugerencias</h3>{voiceComments.filter((comment) => comment.category === "Sugerencia").map((comment) => <blockquote key={comment.text}>“{comment.text}”</blockquote>)}</article><article><h3>⚠️ Atención</h3><p>{reservedVoiceCount ? `${reservedVoiceCount} comentario${reservedVoiceCount === 1 ? " fue reservado" : "s fueron reservados"} para revisión del equipo responsable. No se muestran aquí para proteger su confidencialidad.` : "No hay comentarios reservados dentro del alcance seleccionado."}</p></article></div><div className="voice-reading"><strong>Cómo interpretar esta vista</strong><p><b>Reconocimientos</b> muestran prácticas que conviene conservar. <b>Sugerencias</b> señalan oportunidades concretas, no inconformidades aisladas. <b>Atención</b> agrupa mensajes que requieren un circuito confidencial. Compare siempre las menciones con participación, filtros y evolución entre periodos.</p></div></>}
+              {voiceDetailOpen && <><div className="comment-columns">
+                  {[
+                    { key: "recognition", title: "🌟 Reconocimientos", empty: "Aún no hay reconocimientos escritos por el alumnado en este alcance." },
+                    { key: "suggestion", title: "🔧 Sugerencias", empty: "Aún no hay sugerencias escritas por el alumnado en este alcance." },
+                    { key: "priority", title: "⚠️ Atención", empty: "No hay comentarios que requieran atención dentro del alcance seleccionado." },
+                  ].map((column) => {
+                    const items = voiceComments.filter((comment) => comment.column === column.key);
+                    return (
+                      <article key={column.key}>
+                        <h3>{column.title}</h3>
+                        {items.length
+                          ? items.map((comment) => (
+                              <blockquote key={comment.text}>
+                                “{comment.text}”<cite>{comment.category}</cite>
+                              </blockquote>
+                            ))
+                          : <p className="voice-empty">{column.empty}</p>}
+                      </article>
+                    );
+                  })}
+                </div><div className="voice-reading"><strong>Cómo interpretar esta vista</strong><p><b>Reconocimientos</b> muestran prácticas que conviene conservar. <b>Sugerencias</b> señalan oportunidades concretas, no inconformidades aisladas. <b>Atención</b> agrupa mensajes que requieren un circuito confidencial. Compare siempre las menciones con participación, filtros y evolución entre periodos.</p></div></>}
             </section>
           )}
           {dashboardTab === "report" && (

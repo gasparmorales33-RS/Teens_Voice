@@ -49,3 +49,6 @@ next-env.d.ts
 
 # Claude Code (configuración local de herramientas)
 /.claude/
+
+# Artefacto incremental de TypeScript
+tsconfig.tsbuildinfo

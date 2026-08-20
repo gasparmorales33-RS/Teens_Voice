@@ -917,3 +917,8 @@ button:active:not(:disabled) { transform:translateY(1px) scale(.99); }
   .matrix-dialog-heading { padding-right:34px; }
   .achievement-badge { padding-left:16px; padding-right:16px; }
 }
+
+/* Voz del alumnado: los comentarios ahora son reales, así que las columnas
+   pueden quedar vacías legítimamente y deben decirlo en vez de verse rotas. */
+.voice-empty { margin:6px 0 0; color:var(--muted); font-size:var(--fs-2xs); line-height:1.5; }
+.comment-columns blockquote cite { display:block; margin-top:6px; color:var(--muted); font-size:var(--fs-3xs); font-style:normal; font-weight:800; letter-spacing:.3px; text-transform:uppercase; }
