@@ -1341,23 +1341,9 @@ export default function Home() {
           <div><strong>IMAA Teens Voice</strong><span>Instituto Mexicano de Alto Aprendizaje</span></div>
         </div>
         <div className="header-controls">
-          {/* El conmutador anterior ofrecía "🔒 Resultados" a todo el mundo,
-              incluidos los alumnos, junto a las evaluaciones de sus propios
-              docentes. El acceso del personal queda discreto; la protección
-              real corresponde a la autenticación del servidor. */}
-          {view === "welcome" ? null : view === "test" ? (
-            <button
-              type="button"
-              className="staff-access"
-              onClick={() => setView("data")}
-              aria-label="Acceso para personal autorizado"
-              title="Acceso para personal autorizado"
-            >
-              <span aria-hidden="true">🔒</span>
-            </button>
-          ) : (
+          {view !== "welcome" && (
             <button type="button" className="staff-return" onClick={() => setView("welcome")}>
-              ← Vista del test
+              ← Inicio
             </button>
           )}
           <button type="button" className="theme-toggle" onClick={() => setDarkMode((current) => !current)} aria-label={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"} title={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"} aria-pressed={darkMode}>
