@@ -30,6 +30,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# La plantilla no lleva secretos y debe viajar con el repositorio.
+!.env.example
 
 # vercel
 .vercel
