@@ -205,6 +205,19 @@ export default function Home() {
           localStorage.removeItem("imma-teens-voice-preview");
         }
       }
+      // Las respuestas ya se conservaban, pero no la posición: quien cerraba
+      // el navegador en el docente 9 de 13 volvía al inicio sin saber dónde
+      // iba. En un cuestionario de este tamaño eso equivale a abandonarlo.
+      const storedPlace = localStorage.getItem("imma-teens-voice-place");
+      if (storedPlace) {
+        try {
+          const place = JSON.parse(storedPlace);
+          if (typeof place.level === "number") setLevel(Math.max(0, Math.min(place.level, levels.length - 1)));
+          if (typeof place.teacherIndex === "number") setTeacherIndex(Math.max(0, place.teacherIndex));
+        } catch {
+          localStorage.removeItem("imma-teens-voice-place");
+        }
+      }
       if (sessionStorage.getItem("imma-admin-preview") === "authorized") setAuthorized(true);
       const storedTheme = localStorage.getItem("imaa-theme");
       const useDarkTheme = storedTheme === "dark";
@@ -225,6 +238,10 @@ export default function Home() {
   }, [actionStatuses]);
 
   useEffect(() => {
+    localStorage.setItem("imma-teens-voice-place", JSON.stringify({ level, teacherIndex }));
+  }, [level, teacherIndex]);
+
+  useEffect(() => {
     if (!Object.keys(answers).length) return;
     localStorage.setItem("imma-teens-voice-preview", JSON.stringify(answers));
     const savedTimer = setTimeout(() => setSaved(true), 0);
@@ -240,10 +257,15 @@ export default function Home() {
   const openTeacher = (index: number) => {
     setTeacherIndex(index);
     setExpandedTeacherQuestion(null);
-    requestAnimationFrame(() => document.querySelector(".teacher-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    // En móvil la lista de docentes se apila encima del formulario, así que
+    // apuntar a `.teacher-workspace` devolvía al alumno a la misma lista que
+    // acababa de usar. Se apunta a la ficha del docente, que es donde empieza
+    // lo que tiene que responder.
+    requestAnimationFrame(() =>
+      document.querySelector(".teacher-main-card")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
   };
 
-  const progress = Math.round((level / (levels.length - 1)) * 100);
   const answeredCount = Object.values(answers).filter((value) => Array.isArray(value) ? value.length > 0 : Boolean(value)).length;
   const levelEncouragement = ["Tu voz inicia aquí", "Conocerte ayuda a interpretar mejor", "Cada docente se evalúa por separado", "Piensa en experiencias concretas", "Selecciona sólo los servicios que conoces", "Tus ideas pueden convertirse en acciones", "Revisa y finaliza con confianza"][level];
   const goToLevel = (target: number) => {
@@ -269,6 +291,20 @@ export default function Home() {
   const selectedStudentGroup = String(answers.group || "");
   const studentGroupOptions = selectedStudentGrade ? catalogGroupsForGrade(selectedStudentGrade) : [];
   const studentTeachers = teacherCatalog.filter((teacher) => teacher.grade === selectedStudentGrade && teacher.group === selectedStudentGroup);
+
+  // El nivel de docentes concentra 15 reactivos por cada docente del grupo
+  // (de 7 a 13 según el grado), así que contarlo como "uno de siete pasos"
+  // dejaba la barra clavada en 33% durante la mayor parte del cuestionario.
+  // Se pondera cada nivel por su carga real para que el avance no mienta.
+  const teacherCount = Math.max(1, studentTeachers.length);
+  const completedTeacherCount = studentTeachers.filter((item) =>
+    teacherQuestions.every((question) => Boolean(answers[`teacher_${item.code}_${question.id}`])),
+  ).length;
+  const levelWeights = [0, 1, teacherCount, 1, 1, 1, 1];
+  const totalWeight = levelWeights.reduce((sum, weight) => sum + weight, 0);
+  const completedWeight = levelWeights.slice(0, level).reduce((sum, weight) => sum + weight, 0);
+  const currentLevelWeight = level === 2 ? completedTeacherCount : 0;
+  const progress = Math.round(((completedWeight + currentLevelWeight) / totalWeight) * 100);
   const resultGroupOptions = filters.grade === "Todos los grados"
     ? [...new Set(teacherCatalog.map((teacher) => teacher.group))]
     : catalogGroupsForGrade(filters.grade);
@@ -1305,10 +1341,25 @@ export default function Home() {
           <div><strong>IMAA Teens Voice</strong><span>Instituto Mexicano de Alto Aprendizaje</span></div>
         </div>
         <div className="header-controls">
-          <div className="view-switch">
-            <button className={view === "test" ? "active" : ""} onClick={() => setView("test")}>Vista del test</button>
-            <button className={view === "data" ? "active" : ""} onClick={() => setView("data")}>🔒 Resultados</button>
-          </div>
+          {/* El conmutador anterior ofrecía "🔒 Resultados" a todo el mundo,
+              incluidos los alumnos, junto a las evaluaciones de sus propios
+              docentes. El acceso del personal queda discreto; la protección
+              real corresponde a la autenticación del servidor. */}
+          {view === "test" ? (
+            <button
+              type="button"
+              className="staff-access"
+              onClick={() => setView("data")}
+              aria-label="Acceso para personal autorizado"
+              title="Acceso para personal autorizado"
+            >
+              <span aria-hidden="true">🔒</span>
+            </button>
+          ) : (
+            <button type="button" className="staff-return" onClick={() => setView("test")}>
+              ← Vista del test
+            </button>
+          )}
           <button type="button" className="theme-toggle" onClick={() => setDarkMode((current) => !current)} aria-label={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"} title={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"} aria-pressed={darkMode}>
             <span aria-hidden="true">{darkMode ? "🌙" : "☀️"}</span>
           </button>

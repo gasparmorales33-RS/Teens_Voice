@@ -46,3 +46,6 @@ next-env.d.ts
 /.npm-cache/
 /.dev-server*.log
 /.dev-server.pid
+
+# Claude Code (configuración local de herramientas)
+/.claude/
