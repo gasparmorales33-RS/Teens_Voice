@@ -46,6 +46,9 @@ const teacherQuestions = [
 ];
 
 const teacherDimensions = [...new Set(teacherQuestions.map((question) => question.dimension))];
+const teacherIndicatorLabels = ["Claridad al explicar", "Trato respetuoso", "Evaluación justa", "Confianza para preguntar"];
+const evaluationReading = (value: number) => value >= 75 ? "Fortaleza" : value >= 50 ? "Atención" : "Área prioritaria";
+const matrixAverageFromIndex = (value: number) => Number((7 - (value / 100) * 6).toFixed(2));
 
 const exampleTeachers = [
   { code: "matematicas", initials: "AM", name: "Mtra. Andrea Martínez", subject: "Matemáticas" },
@@ -788,18 +791,17 @@ export default function Home() {
       const totalResponses = selectedTeachers.reduce((sum, teacher) => sum + teacher.responses, 0);
       const average = selectedTeachers.length ? selectedTeachers.reduce((sum, teacher) => sum + teacher.score, 0) / selectedTeachers.length : 0;
       const positive = selectedTeachers.length ? Math.round(selectedTeachers.reduce((sum, teacher) => sum + teacher.positive, 0) / selectedTeachers.length) : 0;
-      const scoreFromPositive = (value: number) => Number((7 - value * 0.06).toFixed(2));
-      const reading = (value: number) => value >= 85 ? "Fortaleza" : value >= 70 ? "Seguimiento" : "Prioridad";
-      const readingColor = (value: number) => value >= 85 ? green : value >= 70 ? amber : red;
-      const dimensionRows = teacherDimensions.map((dimension, index) => {
-        const values = selectedTeachers.map((teacher) => teacher.indicators[index % teacher.indicators.length] ?? teacher.positive);
+      const readingColor = (value: number) => value >= 75 ? green : value >= 50 ? amber : red;
+      const dimensionRows = teacherDimensions.map((dimension) => {
+        const questionIndexes = teacherQuestions.map((question, index) => ({ question, index })).filter(({ question }) => question.dimension === dimension).map(({ index }) => index);
+        const values = selectedTeachers.flatMap((teacher) => questionIndexes.map((questionIndex) => teacher.indicators[questionIndex % teacher.indicators.length] ?? teacher.positive));
         const result = values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
-        return [dimension, teacherQuestions.filter((question) => question.dimension === dimension).length, scoreFromPositive(result).toFixed(2), `${result}%`, reading(result)];
+        return [dimension, questionIndexes.length, matrixAverageFromIndex(result).toFixed(2), `${result}%`, evaluationReading(result)];
       });
       const questionRows = teacherQuestions.map((question, index) => {
         const values = selectedTeachers.map((teacher) => teacher.indicators[index % teacher.indicators.length] ?? teacher.positive);
         const result = values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
-        return [question.id.toUpperCase(), question.dimension, question.text, totalResponses, scoreFromPositive(result).toFixed(2), `${result}%`, reading(result)];
+        return [question.id.toUpperCase(), question.dimension, question.text, totalResponses, matrixAverageFromIndex(result).toFixed(2), `${result}%`, evaluationReading(result)];
       });
 
       const drawHeader = (section: string) => {
@@ -857,7 +859,7 @@ export default function Home() {
       autoTable(pdf, {
         startY: 46, margin: { left: 14, right: 14, bottom: 16 },
         head: [["Docente", "Materia", "Evaluaciones", "Promedio", "Índice", "Fortaleza", "Oportunidad", "Estado"]],
-        body: selectedTeachers.map((teacher) => [teacher.name, teacher.subject, teacher.responses, teacher.score.toFixed(1), `${teacher.positive}%`, teacher.strength, teacher.opportunity, teacher.priority]),
+        body: selectedTeachers.map((teacher) => [teacher.name, teacher.subject, teacher.responses, teacher.score.toFixed(1), `${teacher.positive}%`, teacher.strength, teacher.opportunity, evaluationReading(teacher.positive)]),
         theme: "grid", headStyles: { fillColor: blue, textColor: 255 }, alternateRowStyles: { fillColor: [247, 249, 252] },
         styles: { fontSize: 6.4, cellPadding: 2, lineColor: [222, 227, 237], lineWidth: .12 },
         columnStyles: { 0: { cellWidth: 48 }, 1: { cellWidth: 31 }, 2: { cellWidth: 22, halign: "center" }, 3: { cellWidth: 20, halign: "center" }, 4: { cellWidth: 20, halign: "center", fontStyle: "bold" }, 5: { cellWidth: 39 }, 6: { cellWidth: 43 }, 7: { cellWidth: 28 } },
@@ -1076,8 +1078,7 @@ export default function Home() {
       const navy: [number, number, number] = [21, 28, 98];
       const blue: [number, number, number] = [38, 60, 160];
       const yellow: [number, number, number] = [246, 197, 21];
-      const indicatorLabels = ["Claridad al explicar", "Trato respetuoso", "Evaluación justa", "Confianza para preguntar"];
-      const reading = (value: number) => value >= 90 ? "Fortaleza consolidada" : value >= 80 ? "Resultado favorable" : value >= 70 ? "Requiere seguimiento" : "Atención prioritaria";
+      const teacherStatus = evaluationReading(teacher.positive);
 
       pdf.setFillColor(...navy); pdf.rect(0, 0, 210, 27, "F");
       pdf.setFillColor(...yellow); pdf.rect(0, 27, 210, 2, "F");
@@ -1087,21 +1088,24 @@ export default function Home() {
       pdf.setFillColor(244, 246, 252); pdf.roundedRect(14, 35, 182, 25, 3, 3, "F");
       pdf.setTextColor(...navy); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13); pdf.text(teacher.name, 20, 45);
       pdf.setFont("helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(75); pdf.text(`${teacher.subject} · ${teacher.responses} evaluaciones válidas`, 20, 53);
-      pdf.setFillColor(teacher.priority === "Fortaleza" ? 224 : 255, teacher.priority === "Fortaleza" ? 245 : 244, teacher.priority === "Fortaleza" ? 234 : 218);
-      pdf.roundedRect(158, 42, 31, 10, 5, 5, "F"); pdf.setFont("helvetica", "bold"); pdf.setFontSize(7); pdf.setTextColor(...navy); pdf.text(teacher.priority, 173.5, 48.5, { align: "center" });
+      pdf.setFillColor(teacher.positive >= 75 ? 224 : teacher.positive >= 50 ? 255 : 253, teacher.positive >= 75 ? 245 : teacher.positive >= 50 ? 244 : 233, teacher.positive >= 75 ? 234 : teacher.positive >= 50 ? 218 : 231);
+      pdf.roundedRect(153, 42, 36, 10, 5, 5, "F"); pdf.setFont("helvetica", "bold"); pdf.setFontSize(7); pdf.setTextColor(...navy); pdf.text(teacherStatus, 171, 48.5, { align: "center" });
 
-      [["Promedio", `${teacher.score}`], ["Experiencia positiva", `${teacher.positive}%`], ["Participación", `${teacher.responses}`], ["Tendencia", teacher.trend]].forEach(([label, value], index) => {
+      [["Promedio global / 5", `${teacher.score}`], ["Índice de desempeño", `${teacher.positive}%`], ["Evaluaciones válidas", `${teacher.responses}`], ["Equivalencia matriz / 7", matrixAverageFromIndex(teacher.positive).toFixed(2)]].forEach(([label, value], index) => {
         const x = 14 + index * 46; pdf.setFillColor(248, 249, 252); pdf.roundedRect(x, 66, 42, 20, 2, 2, "F");
         pdf.setFont("helvetica", "bold"); pdf.setFontSize(11); pdf.setTextColor(...blue); pdf.text(value, x + 4, 75);
         pdf.setFont("helvetica", "normal"); pdf.setFontSize(6.2); pdf.setTextColor(95); pdf.text(label, x + 4, 82);
       });
 
+      pdf.setFont("helvetica", "normal"); pdf.setFontSize(6.2); pdf.setTextColor(95);
+      pdf.text("La equivalencia / 7 utiliza la misma fórmula e índice que la matriz detallada: (7 - promedio) ÷ 6.", 14, 91);
       autoTable(pdf, {
-        startY: 92, margin: { left: 14, right: 14 },
+        startY: 96, margin: { left: 14, right: 14 },
         head: [["Indicador evaluado", "Resultado", "Interpretación"]],
-        body: indicatorLabels.map((label, index) => [label, `${teacher.indicators[index]}%`, reading(teacher.indicators[index])]),
+        body: teacherIndicatorLabels.map((label, index) => [label, `${teacher.indicators[index]}%`, evaluationReading(teacher.indicators[index])]),
         theme: "grid", headStyles: { fillColor: blue }, styles: { fontSize: 7, cellPadding: 2 },
         columnStyles: { 1: { halign: "center", fontStyle: "bold", cellWidth: 25 }, 2: { cellWidth: 52 } },
+        didParseCell: (data) => { if (data.section === "body" && data.column.index === 2) { const row = data.row.raw as (string | number)[]; const value = Number(String(row[1] ?? "0").replace("%", "")); data.cell.styles.textColor = value >= 75 ? [35, 132, 93] : value >= 50 ? [187, 132, 13] : [190, 67, 61]; data.cell.styles.fontStyle = "bold"; } },
       });
       let y = (pdf as typeof pdf & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
       [["Fortaleza principal", teacher.strength, [232, 247, 239]], ["Oportunidad prioritaria", teacher.opportunity, [255, 247, 220]]].forEach(([label, text, color], index) => {
