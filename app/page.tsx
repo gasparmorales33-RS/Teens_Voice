@@ -1531,7 +1531,7 @@ export default function Home() {
             </button>
           )}
           <button type="button" className="theme-toggle" onClick={() => setDarkMode((current) => !current)} aria-label={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"} title={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"} aria-pressed={darkMode}>
-            <span aria-hidden="true">{darkMode ? "🌙" : "☀️"}</span>
+            <span className={`theme-icon ${darkMode ? "theme-icon-moon" : "theme-icon-sun"}`} aria-hidden="true" />
           </button>
         </div>
       </header>
