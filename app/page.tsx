@@ -165,7 +165,7 @@ function ScaleQuestion({
 }
 
 export default function Home() {
-  const [view, setView] = useState<"test" | "data">("test");
+  const [view, setView] = useState<"welcome" | "test" | "data">("welcome");
   const [darkMode, setDarkMode] = useState(false);
   const [level, setLevel] = useState(0);
   const [answers, setAnswers] = useState<Answers>({});
@@ -1335,7 +1335,7 @@ export default function Home() {
 
   return (
     <main>
-      <header className="topbar">
+      <header className={`topbar ${view === "welcome" ? "welcome-topbar" : ""}`}>
         <div className="brand">
           <img className="official-logo" src="/imma-logo.png" alt="Logotipo del Instituto Mexicano de Alto Aprendizaje" />
           <div><strong>IMAA Teens Voice</strong><span>Instituto Mexicano de Alto Aprendizaje</span></div>
@@ -1345,7 +1345,7 @@ export default function Home() {
               incluidos los alumnos, junto a las evaluaciones de sus propios
               docentes. El acceso del personal queda discreto; la protección
               real corresponde a la autenticación del servidor. */}
-          {view === "test" ? (
+          {view === "welcome" ? null : view === "test" ? (
             <button
               type="button"
               className="staff-access"
@@ -1356,7 +1356,7 @@ export default function Home() {
               <span aria-hidden="true">🔒</span>
             </button>
           ) : (
-            <button type="button" className="staff-return" onClick={() => setView("test")}>
+            <button type="button" className="staff-return" onClick={() => setView("welcome")}>
               ← Vista del test
             </button>
           )}
@@ -1366,7 +1366,41 @@ export default function Home() {
         </div>
       </header>
 
-      {view === "test" ? (
+      {view === "welcome" ? (
+        <section className="role-welcome" aria-labelledby="role-welcome-title">
+          <div className="welcome-aura welcome-aura-one" aria-hidden="true" />
+          <div className="welcome-aura welcome-aura-two" aria-hidden="true" />
+          <div className="role-welcome-copy">
+            <span className="welcome-seal" aria-hidden="true">✦</span>
+            <p className="eyebrow">IMAA TEENS VOICE</p>
+            <h1 id="role-welcome-title">Tu voz transforma<br /><span>nuestra comunidad</span></h1>
+            <p>Bienvenido a un espacio creado para escuchar, comprender y mejorar juntos. Elige cómo deseas ingresar.</p>
+          </div>
+          <div className="role-grid">
+            <button type="button" className="role-card student-role" onClick={() => setView("test")}>
+              <span className="role-icon" aria-hidden="true"><b>☺</b></span>
+              <span className="role-kicker">SOY ESTUDIANTE</span>
+              <strong>Quiero compartir mi experiencia</strong>
+              <span className="role-description">Responde el test de forma anónima y ayúdanos a construir una mejor experiencia escolar.</span>
+              <span className="role-action">Comenzar mi participación <b aria-hidden="true">→</b></span>
+              <span className="role-note">Tus respuestas son confidenciales</span>
+            </button>
+            <button type="button" className="role-card director-role" onClick={() => setView("data")}>
+              <span className="role-icon" aria-hidden="true"><b>▥</b></span>
+              <span className="role-kicker">SOY DIRECTIVO</span>
+              <strong>Quiero consultar los resultados</strong>
+              <span className="role-description">Ingresa al portal institucional para analizar hallazgos, tendencias y oportunidades de mejora.</span>
+              <span className="role-action">Acceder al portal <b aria-hidden="true">→</b></span>
+              <span className="role-note">Acceso exclusivo para personal autorizado</span>
+            </button>
+          </div>
+          <div className="welcome-values" aria-label="Principios de IMAA Teens Voice">
+            <span><b aria-hidden="true">✓</b> Escucha activa</span>
+            <span><b aria-hidden="true">✓</b> Participación segura</span>
+            <span><b aria-hidden="true">✓</b> Mejora continua</span>
+          </div>
+        </section>
+      ) : view === "test" ? (
         <>
           {level > 0 && (
             <div className="progress-shell">
