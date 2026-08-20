@@ -165,7 +165,7 @@ function ScaleQuestion({
 }
 
 export default function Home() {
-  const [view, setView] = useState<"welcome" | "test" | "data">("welcome");
+  const [view, setView] = useState<"welcome" | "test" | "thanks" | "data">("welcome");
   const [darkMode, setDarkMode] = useState(false);
   const [level, setLevel] = useState(0);
   const [answers, setAnswers] = useState<Answers>({});
@@ -194,6 +194,7 @@ export default function Home() {
   const [responseCount, setResponseCount] = useState(84);
   const [exporting, setExporting] = useState<"excel" | "pdf" | "teacher-pdf" | "voice-pdf" | "channel-pdf" | null>(null);
   const [matrixExporting, setMatrixExporting] = useState(false);
+  const [completionBadge, setCompletionBadge] = useState({ folio: "", date: "" });
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -284,6 +285,23 @@ export default function Home() {
     } else {
       setLoginError("El usuario o la contraseña no son correctos.");
     }
+  };
+
+  const completeTest = () => {
+    const now = new Date();
+    const badge = {
+      folio: `ITV-${now.getFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+      date: new Intl.DateTimeFormat("es-MX", { dateStyle: "long" }).format(now),
+    };
+    setCompletionBadge(badge);
+    localStorage.setItem("imma-teens-voice-badge", JSON.stringify(badge));
+    localStorage.removeItem("imma-teens-voice-preview");
+    localStorage.removeItem("imma-teens-voice-place");
+    setAnswers({});
+    setLevel(0);
+    setTeacherIndex(0);
+    setView("thanks");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const updateFilter = (key: keyof typeof filters, value: string) => setFilters((current) => ({ ...current, [key]: value }));
@@ -1324,11 +1342,7 @@ export default function Home() {
           <strong>🔒 Tu participación es anónima</strong>
           <p>En la versión final, los resultados se analizarán de forma agrupada y por persona evaluada, nunca por estudiante.</p>
         </div>
-        <button className="primary hero-button" onClick={() => {
-          localStorage.removeItem("imma-teens-voice-preview");
-          setAnswers({});
-          setLevel(0);
-        }}>Finalizar prueba</button>
+        <button className="primary hero-button" onClick={completeTest}>Finalizar prueba</button>
       </section>
     );
   }
@@ -1384,6 +1398,31 @@ export default function Home() {
             <span><b aria-hidden="true">✓</b> Escucha activa</span>
             <span><b aria-hidden="true">✓</b> Participación segura</span>
             <span><b aria-hidden="true">✓</b> Mejora continua</span>
+          </div>
+        </section>
+      ) : view === "thanks" ? (
+        <section className="completion-screen" aria-labelledby="completion-title">
+          <div className="completion-copy">
+            <span className="completion-sparkle" aria-hidden="true">✦</span>
+            <p className="eyebrow">PARTICIPACIÓN COMPLETADA</p>
+            <h1 id="completion-title">¡Gracias por hacer<br /><span>escuchar tu voz!</span></h1>
+            <p>Tu participación ayuda a construir una comunidad escolar más cercana, respetuosa y consciente.</p>
+          </div>
+          <article className="achievement-badge" aria-label="Insignia de participación completada">
+            <div className="badge-medal" aria-hidden="true"><span>✓</span></div>
+            <p>INSIGNIA DIGITAL</p>
+            <h2>Voz que transforma</h2>
+            <span className="badge-year">IMAA TEENS VOICE · {new Date().getFullYear()}</span>
+            <div className="badge-divider" />
+            <strong>Test completado</strong>
+            <small>Folio de participación</small>
+            <code>{completionBadge.folio}</code>
+            <time>{completionBadge.date}</time>
+          </article>
+          <p className="badge-help">Conserva esta insignia como comprobante de que completaste el test. El folio no contiene información personal.</p>
+          <div className="completion-actions">
+            <button type="button" className="primary" onClick={() => window.print()}>Guardar o imprimir insignia</button>
+            <button type="button" className="secondary" onClick={() => setView("welcome")}>Volver al inicio</button>
           </div>
         </section>
       ) : view === "test" ? (
