@@ -25,6 +25,7 @@ supabase/migrations/0002_helpers.sql     Funciones de permisos y de escala
 supabase/migrations/0003_views.sql       Agregados con umbral mínimo
 supabase/migrations/0004_rls.sql         Políticas de acceso
 supabase/migrations/0005_integrity.sql   Disparadores de validación
+supabase/migrations/0006_tokens.sql      Fichas de participación
 supabase/seed/instrument.sql             32 reactivos
 supabase/seed/teachers.sql               23 docentes · 102 asignaciones
 ```
@@ -75,6 +76,53 @@ aplicación pregunta. Si cambia el catálogo docente el próximo ciclo, se edita
    ```sql
    update cycles set is_open = true where id = '2026-2027';
    ```
+
+## Fichas de participación
+
+Cada alumno necesita una ficha de un solo uso para poder responder. Es lo que
+permite a la vez impedir respuestas repetidas y conocer la participación real,
+sin identificar a nadie.
+
+**Emitir**, por grupo, tantas como alumnos haya:
+
+```sql
+select * from issue_tokens('2026-2027', '1.º de secundaria', 'Grupo A', 11);
+```
+
+Devuelve los códigos en claro **una sola vez**. La base guarda únicamente su
+hash, así que no hay forma de recuperarlos después: se imprimen o se copian en
+ese momento, y si se pierden se emiten otros.
+
+**Repartir al azar y sin registro.** Es la única parte que la base de datos no
+puede proteger: si alguien anota qué ficha recibió cada alumno, el anonimato se
+rompe fuera del sistema.
+
+**Seguir el avance** sin ver ningún código:
+
+```sql
+select * from v_token_progress;
+```
+
+**Canjear** ocurre desde la aplicación cuando el alumno escribe su código.
+`redeem_token` verifica la ficha, la marca usada y abre la sesión en la misma
+transacción, sin dejar rastro de la correspondencia entre ambas.
+
+La ficha guarda si se usó, pero no cuándo. Con unos diez alumnos por grupo, una
+marca de tiempo permitiría cruzar el canje con la entrada de una respuesta.
+
+## Moderación de comentarios
+
+Coordinación revisa desde el panel antes de que nada se muestre. Los estados de
+`comments.review_status`:
+
+| Estado | Significado |
+| --- | --- |
+| `pending` | Recién recibido. Nadie lo ha leído y no se muestra |
+| `approved` | Revisado, se muestra tal cual |
+| `redacted` | Se editó para quitar datos identificables; se muestra `published_body` |
+| `reserved` | Contenido sensible. No se expone; se atiende por el circuito confidencial |
+
+`v_published_comments` sólo devuelve `approved` y `redacted`.
 
 ## Decisiones de diseño que conviene no revertir
 
