@@ -767,6 +767,127 @@ export default function Home() {
     }
   };
 
+  const exportTeacherEvaluationPdf = async () => {
+    setMatrixExporting(true);
+    try {
+      const [{ jsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
+      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
+      const selectedTeachers = matrixExportTeacher === "general"
+        ? scopedTeacherAnalysis
+        : scopedTeacherAnalysis.filter((teacher) => teacher.name === matrixExportTeacher);
+      const navy: [number, number, number] = [21, 28, 98];
+      const blue: [number, number, number] = [38, 60, 160];
+      const cyan: [number, number, number] = [53, 172, 210];
+      const gold: [number, number, number] = [246, 197, 21];
+      const green: [number, number, number] = [35, 132, 93];
+      const amber: [number, number, number] = [187, 132, 13];
+      const red: [number, number, number] = [190, 67, 61];
+      const pageWidth = 297;
+      const pageHeight = 210;
+      const scope = `${filters.cycle} · ${filters.grade} · ${filters.group} · ${matrixExportTeacher === "general" ? "Todos los docentes" : matrixExportTeacher}`;
+      const totalResponses = selectedTeachers.reduce((sum, teacher) => sum + teacher.responses, 0);
+      const average = selectedTeachers.length ? selectedTeachers.reduce((sum, teacher) => sum + teacher.score, 0) / selectedTeachers.length : 0;
+      const positive = selectedTeachers.length ? Math.round(selectedTeachers.reduce((sum, teacher) => sum + teacher.positive, 0) / selectedTeachers.length) : 0;
+      const scoreFromPositive = (value: number) => Number((7 - value * 0.06).toFixed(2));
+      const reading = (value: number) => value >= 85 ? "Fortaleza" : value >= 70 ? "Seguimiento" : "Prioridad";
+      const readingColor = (value: number) => value >= 85 ? green : value >= 70 ? amber : red;
+      const dimensionRows = teacherDimensions.map((dimension, index) => {
+        const values = selectedTeachers.map((teacher) => teacher.indicators[index % teacher.indicators.length] ?? teacher.positive);
+        const result = values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
+        return [dimension, teacherQuestions.filter((question) => question.dimension === dimension).length, scoreFromPositive(result).toFixed(2), `${result}%`, reading(result)];
+      });
+      const questionRows = teacherQuestions.map((question, index) => {
+        const values = selectedTeachers.map((teacher) => teacher.indicators[index % teacher.indicators.length] ?? teacher.positive);
+        const result = values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
+        return [question.id.toUpperCase(), question.dimension, question.text, totalResponses, scoreFromPositive(result).toFixed(2), `${result}%`, reading(result)];
+      });
+
+      const drawHeader = (section: string) => {
+        pdf.setFillColor(...navy); pdf.rect(0, 0, pageWidth, 24, "F");
+        pdf.setFillColor(...gold); pdf.rect(0, 24, pageWidth, 2, "F");
+        pdf.setTextColor(255); pdf.setFont("helvetica", "bold"); pdf.setFontSize(14); pdf.text("IMAA Teens Voice", 14, 10);
+        pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.text(section, 14, 18);
+        pdf.text(scope, pageWidth - 14, 14, { align: "right", maxWidth: 125 });
+      };
+      const lastTableY = () => (pdf as typeof pdf & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+
+      drawHeader("Informe especializado · Matriz de evaluación docente");
+      pdf.setTextColor(...navy); pdf.setFont("helvetica", "bold"); pdf.setFontSize(17); pdf.text("Resultados consolidados de evaluación docente", 14, 38);
+      pdf.setFont("helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(82, 91, 115);
+      pdf.text("Lectura integral del alcance seleccionado. En la escala 1-7, un promedio menor representa una mejor valoración.", 14, 45);
+      const cards = [
+        ["DOCENTES", `${new Set(selectedTeachers.map((teacher) => teacher.name)).size}`],
+        ["EVALUACIONES VÁLIDAS", `${totalResponses}`],
+        ["PROMEDIO GENERAL", `${average.toFixed(2)} / 5`],
+        ["ÍNDICE FAVORABLE", `${positive}%`],
+      ];
+      cards.forEach(([label, value], index) => {
+        const x = 14 + index * 67;
+        pdf.setFillColor(index === 3 ? 232 : 245, index === 3 ? 247 : 247, index === 3 ? 239 : 251);
+        pdf.roundedRect(x, 53, 61, 25, 3, 3, "F");
+        pdf.setFont("helvetica", "bold"); pdf.setFontSize(15); pdf.setTextColor(...(index === 3 ? readingColor(positive) : blue)); pdf.text(value, x + 5, 65);
+        pdf.setFontSize(6.5); pdf.setTextColor(93, 104, 129); pdf.text(label, x + 5, 73);
+      });
+      pdf.setFillColor(238, 241, 252); pdf.roundedRect(14, 85, 269, 18, 3, 3, "F");
+      pdf.setFontSize(7.2); pdf.setTextColor(...navy); pdf.setFont("helvetica", "bold"); pdf.text("GUÍA DE LECTURA", 20, 92);
+      pdf.setFont("helvetica", "normal"); pdf.setTextColor(75); pdf.text("Índice = (7 - promedio) ÷ 6 · 85-100 Fortaleza · 70-84 Seguimiento · 0-69 Área prioritaria", 20, 98);
+      autoTable(pdf, {
+        startY: 111, margin: { left: 14, right: 14 },
+        head: [["Dimensión", "Reactivos", "Promedio / 7", "Índice", "Lectura"]], body: dimensionRows,
+        theme: "grid", headStyles: { fillColor: blue, textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [247, 249, 252] }, styles: { fontSize: 7.2, cellPadding: 2.5, lineColor: [221, 226, 237], lineWidth: .15 },
+        columnStyles: { 0: { cellWidth: 100 }, 1: { halign: "center", cellWidth: 28 }, 2: { halign: "center", cellWidth: 36 }, 3: { halign: "center", fontStyle: "bold", cellWidth: 28 }, 4: { cellWidth: 40 } },
+        didParseCell: (data) => { if (data.section === "body" && data.column.index === 4) { const row = data.row.raw as (string | number)[]; const value = Number(String(row[3] ?? "0").replace("%", "")); data.cell.styles.textColor = readingColor(value); data.cell.styles.fontStyle = "bold"; } },
+      });
+
+      pdf.addPage(); drawHeader("Detalle por reactivo · 15 preguntas");
+      pdf.setTextColor(...navy); pdf.setFont("helvetica", "bold"); pdf.setFontSize(15); pdf.text("Matriz completa por reactivo", 14, 38);
+      pdf.setFont("helvetica", "normal"); pdf.setTextColor(85); pdf.setFontSize(7.5); pdf.text("Cada fila conserva el enunciado, la dimensión, el volumen de respuestas y su interpretación.", 14, 45);
+      autoTable(pdf, {
+        startY: 52, margin: { left: 14, right: 14, bottom: 16 },
+        head: [["ID", "Dimensión", "Reactivo", "Respuestas", "Promedio", "Índice", "Lectura"]], body: questionRows,
+        theme: "grid", headStyles: { fillColor: navy, textColor: 255 }, alternateRowStyles: { fillColor: [247, 249, 252] },
+        styles: { fontSize: 6.4, cellPadding: 1.8, overflow: "linebreak", lineColor: [222, 227, 237], lineWidth: .12 },
+        columnStyles: { 0: { cellWidth: 14, halign: "center", fontStyle: "bold" }, 1: { cellWidth: 42 }, 2: { cellWidth: 107 }, 3: { cellWidth: 24, halign: "center" }, 4: { cellWidth: 24, halign: "center" }, 5: { cellWidth: 22, halign: "center", fontStyle: "bold" }, 6: { cellWidth: 32 } },
+        didParseCell: (data) => { if (data.section === "body" && data.column.index === 6) { const row = data.row.raw as (string | number)[]; const value = Number(String(row[5] ?? "0").replace("%", "")); data.cell.styles.textColor = readingColor(value); data.cell.styles.fontStyle = "bold"; } },
+      });
+
+      pdf.addPage(); drawHeader("Detalle por docente y recomendaciones");
+      pdf.setTextColor(...navy); pdf.setFont("helvetica", "bold"); pdf.setFontSize(15); pdf.text("Comparativo del alcance seleccionado", 14, 38);
+      autoTable(pdf, {
+        startY: 46, margin: { left: 14, right: 14, bottom: 16 },
+        head: [["Docente", "Materia", "Evaluaciones", "Promedio", "Índice", "Fortaleza", "Oportunidad", "Estado"]],
+        body: selectedTeachers.map((teacher) => [teacher.name, teacher.subject, teacher.responses, teacher.score.toFixed(1), `${teacher.positive}%`, teacher.strength, teacher.opportunity, teacher.priority]),
+        theme: "grid", headStyles: { fillColor: blue, textColor: 255 }, alternateRowStyles: { fillColor: [247, 249, 252] },
+        styles: { fontSize: 6.4, cellPadding: 2, lineColor: [222, 227, 237], lineWidth: .12 },
+        columnStyles: { 0: { cellWidth: 48 }, 1: { cellWidth: 31 }, 2: { cellWidth: 22, halign: "center" }, 3: { cellWidth: 20, halign: "center" }, 4: { cellWidth: 20, halign: "center", fontStyle: "bold" }, 5: { cellWidth: 39 }, 6: { cellWidth: 43 }, 7: { cellWidth: 28 } },
+      });
+      let y = lastTableY() + 8;
+      if (y < 163) {
+        pdf.setFillColor(255, 248, 220); pdf.roundedRect(14, y, 269, 26, 3, 3, "F");
+        pdf.setTextColor(...navy); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8); pdf.text("Uso recomendado", 20, y + 8);
+        pdf.setTextColor(70); pdf.setFont("helvetica", "normal"); pdf.setFontSize(7);
+        const recommendation = matrixExportTeacher === "general"
+          ? "Revisar primero las dimensiones con menor índice, acordar una mejora observable con cada docente y comparar avances en el siguiente periodo."
+          : selectedTeachers[0]?.recommendation ?? "Dar seguimiento al resultado con una acción concreta y una fecha de revisión.";
+        pdf.text(pdf.splitTextToSize(recommendation, 255), 20, y + 15);
+      }
+
+      const pages = pdf.getNumberOfPages();
+      for (let page = 1; page <= pages; page += 1) {
+        pdf.setPage(page); pdf.setDrawColor(218, 224, 235); pdf.line(14, pageHeight - 11, pageWidth - 14, pageHeight - 11);
+        pdf.setFont("helvetica", "normal"); pdf.setFontSize(6.5); pdf.setTextColor(105);
+        pdf.text("IMAA Teens Voice · Reporte institucional confidencial · Datos agrupados", 14, pageHeight - 6);
+        pdf.text(`${page} / ${pages}`, pageWidth - 14, pageHeight - 6, { align: "right" });
+      }
+      const scopeName = matrixExportTeacher === "general" ? "General" : matrixExportTeacher;
+      pdf.save(`IMAA_Matriz_Evaluacion_${scopeName.replace(/\s+/g, "_")}_${filters.cycle}.pdf`);
+      setMatrixExportOpen(false);
+    } finally {
+      setMatrixExporting(false);
+    }
+  };
+
   const exportExcel = async () => {
     setExporting("excel");
     try {
@@ -1620,7 +1741,7 @@ export default function Home() {
             <section className="evaluation-matrix">
               <div className="page-kicker"><span>Vista especializada · Lineamientos de evaluación docente</span><strong>{scopeLabel}</strong></div>
               <div className="matrix-intro"><div><p className="eyebrow">MATRIZ DE EVALUACIÓN</p><h2>Resultados consolidados por reactivo</h2><p>La matriz conserva la escala original: un promedio menor representa una mejor valoración. El índice transforma el resultado a una lectura de 0 a 100.</p></div><div className="matrix-formula"><strong>Índice = (7 − promedio) ÷ 6</strong><span>1–3 favorables · 5–7 críticas</span></div></div>
-              <div className="matrix-toolbar"><div className="matrix-legend"><span><i className="matrix-good" /> 75–100 Fortaleza</span><span><i className="matrix-watch" /> 50–74 Atención</span><span><i className="matrix-priority" /> 0–49 Área prioritaria</span></div><div className="matrix-toolbar-actions"><button type="button" className="matrix-excel-button" onClick={() => setMatrixExportOpen(true)}>⬇ Generar Excel de evaluación</button><button type="button" onClick={() => setMatrixDetailOpen((current) => !current)}>{matrixDetailOpen ? "Ver resumen" : "Ver 15 reactivos"} <b>{matrixDetailOpen ? "↑" : "↓"}</b></button></div></div>
+              <div className="matrix-toolbar"><div className="matrix-legend"><span><i className="matrix-good" /> 75–100 Fortaleza</span><span><i className="matrix-watch" /> 50–74 Atención</span><span><i className="matrix-priority" /> 0–49 Área prioritaria</span></div><div className="matrix-toolbar-actions"><button type="button" className="matrix-excel-button" onClick={() => setMatrixExportOpen(true)}>⬇ Generar PDF de evaluación</button><button type="button" onClick={() => setMatrixDetailOpen((current) => !current)}>{matrixDetailOpen ? "Ver resumen" : "Ver 15 reactivos"} <b>{matrixDetailOpen ? "↑" : "↓"}</b></button></div></div>
               {!matrixDetailOpen && <div className="dimension-summary-grid">{dimensionMatrix.map((row) => <article key={row.dimension}><div><span>{row.questions} {row.questions === 1 ? "reactivo" : "reactivos"}</span><em className={row.level === "Fortaleza" ? "matrix-level-good" : row.level === "Atención" ? "matrix-level-watch" : "matrix-level-priority"}>{row.level}</em></div><h3>{row.dimension}</h3><div className="dimension-score"><strong>{row.performanceIndex}</strong><span>/100<small>Índice</small></span><b>{row.average}<small>Promedio / 7</small></b></div><i><b style={{ width: `${row.performanceIndex}%` }} /></i></article>)}</div>}
               {matrixDetailOpen && <div className="matrix-scroll">
                 <div className="matrix-table matrix-head"><span>ID</span><span>Dimensión / pregunta</span><span>Respuestas</span><span>Promedio</span><span>Índice</span><span>Nivel</span><span>Favorables</span><span>Críticas</span></div>
@@ -1630,7 +1751,7 @@ export default function Home() {
               {matrixExportOpen && <div className="matrix-export-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setMatrixExportOpen(false); }}>
                 <section className="matrix-export-dialog" role="dialog" aria-modal="true" aria-labelledby="matrix-export-title">
                   <button type="button" className="matrix-dialog-close" onClick={() => setMatrixExportOpen(false)} aria-label="Cerrar">×</button>
-                  <div className="matrix-dialog-heading"><span>📊</span><div><p>EXPORTACIÓN ESPECIALIZADA</p><h2 id="matrix-export-title">Generar matriz docente en Excel</h2><small>La plantilla se llenará con las respuestas del alcance seleccionado.</small></div></div>
+                  <div className="matrix-dialog-heading"><span>📄</span><div><p>REPORTE ESPECIALIZADO</p><h2 id="matrix-export-title">Generar matriz docente en PDF</h2><small>El informe reunirá los resultados completos del alcance seleccionado.</small></div></div>
                   <div className="matrix-export-filters">
                     <div className="matrix-teacher-filter">
                       <label htmlFor="matrix-teacher-search">Resultado a generar</label>
@@ -1641,9 +1762,9 @@ export default function Home() {
                     <label>Grupo<select value={filters.group} onChange={(event) => updateFilter("group", event.target.value)}><option value="Todos los grupos">Todos los grupos que imparte</option>{matrixGroupOptions.map((group) => <option value={group} key={group}>{group}</option>)}</select></label>
                   </div>
                   {matrixExportTeacher !== "general" && <div className="matrix-teacher-context"><span>{matrixExportTeacher.slice(0, 1)}</span><div><strong>{matrixExportTeacher}</strong><small>{selectedMatrixSubjects.join(" · ")}</small><p>{matrixGradeOptions.length} {matrixGradeOptions.length === 1 ? "grado" : "grados"} · {[...new Set(selectedMatrixAssignments.map((teacher) => teacher.group))].length} grupos registrados</p></div></div>}
-                  <div className="matrix-export-summary"><div><span>Alcance</span><strong>{matrixExportTeacher === "general" ? `${new Set(scopedTeacherAnalysis.map((teacher) => teacher.name)).size} docentes` : "1 docente"}</strong></div><div><span>Reactivos</span><strong>15 por evaluación</strong></div><div><span>Libro</span><strong>4 hojas vinculadas</strong></div></div>
-                  <div className="matrix-export-notice"><b>✓</b><p>El archivo incluirá Cuestionario, Captura, Matriz evaluación y Dashboard, con un formato limpio y cálculos actualizados al abrirlo.</p></div>
-                  <div className="matrix-dialog-actions"><button type="button" className="secondary" onClick={() => setMatrixExportOpen(false)}>Cancelar</button><button type="button" className="primary" disabled={matrixExporting} onClick={exportTeacherEvaluationWorkbook}>{matrixExporting ? "Generando archivo…" : "Descargar Excel lleno →"}</button></div>
+                  <div className="matrix-export-summary"><div><span>Alcance</span><strong>{matrixExportTeacher === "general" ? `${new Set(scopedTeacherAnalysis.map((teacher) => teacher.name)).size} docentes` : "1 docente"}</strong></div><div><span>Reactivos</span><strong>15 por evaluación</strong></div><div><span>Reporte</span><strong>3 secciones completas</strong></div></div>
+                  <div className="matrix-export-notice"><b>✓</b><p>El PDF incluirá resumen ejecutivo, resultados por dimensión, los 15 reactivos, comparativo docente, interpretación y recomendaciones.</p></div>
+                  <div className="matrix-dialog-actions"><button type="button" className="secondary" onClick={() => setMatrixExportOpen(false)}>Cancelar</button><button type="button" className="primary" disabled={matrixExporting} onClick={exportTeacherEvaluationPdf}>{matrixExporting ? "Generando PDF…" : "Descargar reporte PDF →"}</button></div>
                 </section>
               </div>}
             </section>
