@@ -922,3 +922,22 @@ button:active:not(:disabled) { transform:translateY(1px) scale(.99); }
    pueden quedar vacías legítimamente y deben decirlo en vez de verse rotas. */
 .voice-empty { margin:6px 0 0; color:var(--muted); font-size:var(--fs-2xs); line-height:1.5; }
 .comment-columns blockquote cite { display:block; margin-top:6px; color:var(--muted); font-size:var(--fs-3xs); font-style:normal; font-weight:800; letter-spacing:.3px; text-transform:uppercase; }
+
+/* Cierre del test: la tarjeta pasó de decorativa a funcional. Cada apartado
+   muestra su avance real y lleva al alumno a lo que le falta, en vez de marcar
+   todo con ✓ sin comprobar nada. */
+.summary-card button { display:flex; align-items:flex-start; gap:10px; width:100%; padding:13px; border:1px solid transparent; border-radius:10px; background:#f4f7fb; color:var(--ink); font-size:var(--fs-sm); text-align:left; transition:border-color .18s, background .18s; }
+.summary-card button:hover { border-color:#c3cee2; background:#eef3fa; }
+.summary-card button > span { flex:0 0 auto; font-weight:900; }
+/* La regla previa `.summary-card div` pintaba un recuadro con fondo y padding;
+   al anidar un div dentro del botón aparecía una caja dentro de otra. */
+.summary-card button > div { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; padding:0; background:none; border-radius:0; }
+.summary-card button strong { font-weight:800; line-height:1.3; }
+.summary-card button small { color:var(--muted); font-size:var(--fs-2xs); }
+.summary-card .summary-done { background:var(--green-soft); }
+.summary-card .summary-done > span { color:#24a66b; }
+.summary-card .summary-pending { background:var(--gold-soft); }
+.summary-card .summary-pending > span { color:#b3861a; }
+.finish .hero-button:disabled { opacity:.55; cursor:not-allowed; }
+:root[data-theme="dark"] .summary-card button { background:#1d263a; }
+:root[data-theme="dark"] .summary-card button:hover { background:#243049; border-color:#3b465d; }

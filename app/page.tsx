@@ -238,6 +238,10 @@ export default function Home() {
   };
 
   const completeTest = () => {
+    // Segunda barrera además del botón deshabilitado. Cuando el envío vaya a
+    // Supabase, esta función gastará una ficha de un solo uso: una sesión vacía
+    // sería irreversible para ese alumno y contaría como participación real.
+    if (!canFinishTest) return;
     const now = new Date();
     const badge = {
       folio: `ITV-${now.getFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
@@ -260,19 +264,64 @@ export default function Home() {
   const studentGroupOptions = selectedStudentGrade ? catalogGroupsForGrade(selectedStudentGrade) : [];
   const studentTeachers = teacherCatalog.filter((teacher) => teacher.grade === selectedStudentGrade && teacher.group === selectedStudentGroup);
 
-  // El nivel de docentes concentra 15 reactivos por cada docente del grupo
-  // (de 7 a 13 según el grado), así que contarlo como "uno de siete pasos"
-  // dejaba la barra clavada en 33% durante la mayor parte del cuestionario.
-  // Se pondera cada nivel por su carga real para que el avance no mienta.
-  const teacherCount = Math.max(1, studentTeachers.length);
-  const completedTeacherCount = studentTeachers.filter((item) =>
-    teacherQuestions.every((question) => Boolean(answers[`teacher_${item.code}_${question.id}`])),
-  ).length;
-  const levelWeights = [0, 1, teacherCount, 1, 1, 1, 1];
-  const totalWeight = levelWeights.reduce((sum, weight) => sum + weight, 0);
-  const completedWeight = levelWeights.slice(0, level).reduce((sum, weight) => sum + weight, 0);
-  const currentLevelWeight = level === 2 ? completedTeacherCount : 0;
-  const progress = Math.round(((completedWeight + currentLevelWeight) / totalWeight) * 100);
+  /* -----------------------------------------------------------------------
+     Avance real por nivel.
+     La pantalla de cierre marcaba todos los niveles con ✓ sin comprobar nada,
+     de modo que quien no respondía absolutamente nada recibía igualmente su
+     insignia. Con respuestas reales eso significaría gastar una ficha y
+     registrar una sesión vacía que infla la participación sin aportar datos.
+     ----------------------------------------------------------------------- */
+  const institutionalIds = ["imma_safe", "imma_heard", "imma_help"];
+  const directorIds = [
+    "director_agreements", "director_communication", "director_listens",
+    "director_fair", "director_followup",
+  ];
+  const supportItemsByArea: Record<string, string[]> = {
+    "🧠 Psicología": ["psych_listens", "psych_safe", "psych_useful"],
+    "🩺 Enfermería": ["nurse_care", "nurse_clear", "nurse_followup"],
+    "🤝 Tutoría": ["tutor_listens", "tutor_guidance", "tutor_cares"],
+  };
+  const answeredAmong = (ids: string[]) => ids.filter((id) => Boolean(answers[id])).length;
+
+  const chosenSupport = Array.isArray(answers.support) ? answers.support : [];
+  const supportItemsToAnswer = chosenSupport.flatMap((area) => supportItemsByArea[area] ?? []);
+  const teacherItemsTotal = studentTeachers.length * teacherQuestions.length;
+  const teacherItemsAnswered = studentTeachers.reduce(
+    (total, item) => total + teacherQuestions.filter((question) => Boolean(answers[`teacher_${item.code}_${question.id}`])).length,
+    0,
+  );
+
+  const levelProgress = [
+    {
+      level: 1,
+      label: levels[1],
+      answered: (selectedStudentGrade ? 1 : 0) + (selectedStudentGroup ? 1 : 0) + answeredAmong(institutionalIds),
+      total: 2 + institutionalIds.length,
+    },
+    { level: 2, label: levels[2], answered: teacherItemsAnswered, total: teacherItemsTotal },
+    { level: 3, label: levels[3], answered: answeredAmong(directorIds), total: directorIds.length },
+    {
+      level: 4,
+      label: levels[4],
+      // Elegir "No he utilizado estos servicios" ya completa el nivel: no hay
+      // nada más que responder y obligar a más sería pedir una opinión inventada.
+      answered: chosenSupport.length ? answeredAmong(supportItemsToAnswer) + 1 : 0,
+      total: chosenSupport.length ? supportItemsToAnswer.length + 1 : 1,
+    },
+    // El nivel 5 son textos abiertos, opcionales por diseño.
+    { level: 5, label: levels[5], answered: 1, total: 1, optional: true },
+  ].map((entry) => ({ ...entry, done: entry.total > 0 && entry.answered >= entry.total }));
+
+  const pendingLevels = levelProgress.filter((entry) => !entry.done);
+  const canFinishTest = pendingLevels.length === 0;
+
+  // El avance se mide por reactivos respondidos, no por el nivel en que está
+  // parado el alumno. Antes bastaba con pulsar "Continuar" seis veces para ver
+  // 94 % sin haber contestado nada, y el nivel de docentes —que concentra 15
+  // reactivos por cada docente del grupo— pesaba lo mismo que cualquier otro.
+  const progressAnswered = levelProgress.reduce((sum, entry) => sum + Math.min(entry.answered, entry.total), 0);
+  const progressTotal = levelProgress.reduce((sum, entry) => sum + entry.total, 0);
+  const progress = progressTotal > 0 ? Math.round((progressAnswered / progressTotal) * 100) : 0;
   const resultGroupOptions = filters.grade === "Todos los grados"
     ? [...new Set(teacherCatalog.map((teacher) => teacher.group))]
     : catalogGroupsForGrade(filters.grade);
@@ -1470,18 +1519,47 @@ export default function Home() {
 
     return (
       <section className="finish">
-        <div className="confetti">✦　🎉　✦</div>
-        <p className="eyebrow">RECORRIDO COMPLETADO</p>
-        <h1>Tu voz deja huella</h1>
-        <p className="lead">Puedes regresar para revisar tus respuestas o finalizar esta prueba de demostración.</p>
+        {/* El encabezado celebraba el final aunque faltara todo por responder,
+            contradiciendo al propio texto de abajo. */}
+        <div className="confetti">{canFinishTest ? "✦　🎉　✦" : "✦　📝　✦"}</div>
+        <p className="eyebrow">{canFinishTest ? "RECORRIDO COMPLETADO" : "ÚLTIMO PASO"}</p>
+        <h1>{canFinishTest ? "Tu voz deja huella" : "Casi terminas"}</h1>
+        <p className="lead">
+          {canFinishTest
+            ? "Revisaste todo el recorrido. Puedes regresar a cambiar cualquier respuesta o enviarlo."
+            : "Te falta responder algunos apartados. Toca el que quieras completar."}
+        </p>
+        {/* Antes esta tarjeta marcaba todos los niveles con ✓ sin comprobar
+            nada. Ahora refleja el avance real y permite saltar a lo que falta. */}
         <div className="summary-card">
-          {levels.slice(1, -1).map((item) => <div key={item}><span>✓</span>{item}</div>)}
+          {levelProgress.map((entry) => (
+            <button
+              type="button"
+              key={entry.label}
+              className={entry.done ? "summary-done" : "summary-pending"}
+              onClick={() => goToLevel(entry.level)}
+            >
+              <span>{entry.done ? "✓" : "•"}</span>
+              <div>
+                <strong>{entry.label}</strong>
+                {!entry.done && (
+                  <small>
+                    {entry.level === 4 && !chosenSupport.length
+                      ? "Indica con qué áreas has tenido contacto"
+                      : `${entry.total - entry.answered} sin responder`}
+                  </small>
+                )}
+              </div>
+            </button>
+          ))}
         </div>
         <div className="final-message">
           <strong>🔒 Tu participación es anónima</strong>
           <p>En la versión final, los resultados se analizarán de forma agrupada y por persona evaluada, nunca por estudiante.</p>
         </div>
-        <button className="primary hero-button" onClick={completeTest}>Finalizar prueba</button>
+        <button className="primary hero-button" onClick={completeTest} disabled={!canFinishTest}>
+          {canFinishTest ? "Enviar mis respuestas" : `Faltan ${pendingLevels.length} apartados`}
+        </button>
       </section>
     );
   }
@@ -1573,7 +1651,10 @@ export default function Home() {
               <div className="level-dots">
                 {levels.slice(1).map((item, index) => {
                   const target = index + 1;
-                  return <button type="button" key={item} title={target <= level ? `Volver a ${item}` : item} aria-label={`${item}${target === level ? ", etapa actual" : ""}`} disabled={target > level} className={`${target < level ? "done" : ""} ${target === level ? "current" : ""}`} onClick={() => goToLevel(target)}>{target < level ? "✓" : target}</button>;
+                  // El ✓ indica que el apartado está respondido, no que el
+                  // alumno haya pasado por encima de él.
+                  const stepDone = levelProgress.find((entry) => entry.level === target)?.done ?? false;
+                  return <button type="button" key={item} title={target <= level ? `Volver a ${item}` : item} aria-label={`${item}${target === level ? ", etapa actual" : ""}${stepDone ? ", completado" : ""}`} disabled={target > level} className={`${stepDone ? "done" : ""} ${target === level ? "current" : ""}`} onClick={() => goToLevel(target)}>{stepDone ? "✓" : target}</button>;
                 })}
               </div>
               <div className="progress-context"><span>{levelEncouragement}</span><strong>{answeredCount} {answeredCount === 1 ? "respuesta registrada" : "respuestas registradas"}</strong></div>
