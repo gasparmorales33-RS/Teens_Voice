@@ -315,7 +315,6 @@ export default function Home() {
     setAnalysisTeacherOffset(Math.floor(Math.random() * Math.max(1, resultTeachers.length)));
   }, [filters.grade, filters.group]);
   const scopeLabel = [filters.cycle, filters.grade, filters.group, filters.area].join(" · ");
-  const activeResultTab = resultTabs.find((tab) => tab.id === dashboardTab) ?? resultTabs[0];
   /* -----------------------------------------------------------------------
      Todas las vistas del panel se agregan de un único conjunto de respuestas.
      Antes cada pestaña calculaba lo suyo por separado —hash del nombre para
@@ -1622,7 +1621,6 @@ export default function Home() {
           <nav className="dashboard-tabs" aria-label="Secciones de resultados">
             {resultTabs.map((tab) => <button key={tab.id} className={dashboardTab === tab.id ? "active" : ""} onClick={() => { setDashboardTab(tab.id); if (tab.id === "support") setSelectedSupportArea(0); }}>{tab.label}</button>)}
           </nav>
-          <div className="result-tab-context"><span>{activeResultTab.icon}</span><div><strong>{activeResultTab.label}</strong><p>{activeResultTab.description}</p></div><div className="result-context-stats"><b>{scopedResponseCount}<small>respuestas</small></b><b>{participationRate}%<small>participación</small></b></div></div>
           <div className="filter-panel results-filter-bar">
             <div className="filter-title"><div><strong>Filtros de consulta</strong><span>El contenido se actualiza al instante.</span></div><button onClick={() => setFilters({ cycle: "2026–2027", grade: "Todos los grados", group: "Todos los grupos", area: "Todas las áreas" })}>Limpiar filtros</button></div>
             <div className="filters">
