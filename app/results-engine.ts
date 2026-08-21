@@ -16,7 +16,7 @@
  * devuelve filas de Supabase en vez de generadas, el resto no cambia.
  */
 
-import { teacherCatalog, type TeacherAssignment } from "./teacher-catalog";
+import { teacherCatalog, electiveCatalog, electiveStreams, type TeacherAssignment } from "./teacher-catalog";
 
 /* -------------------------------------------------------------------------
    Instrumento
@@ -177,7 +177,7 @@ export const buildDataset = (universe: number, respondents: number, cycleSeed = 
 
   // Calidad latente por docente, en la escala 1–7 donde menor es mejor.
   const teacherQuality = new Map<string, number>();
-  for (const teacher of teacherCatalog) {
+  for (const teacher of [...teacherCatalog, ...electiveCatalog]) {
     const base = mulberry32(hashText(teacher.code) ^ cycleSeed);
     teacherQuality.set(teacher.code, 1.5 + base() * 2.1);
   }
@@ -217,6 +217,15 @@ export const buildDataset = (universe: number, respondents: number, cycleSeed = 
     const assigned = teacherCatalog.filter(
       (teacher) => teacher.grade === student.grade && teacher.group === student.group,
     );
+
+    // El inglés se cursa por nivel, no por grupo: se le asigna uno estable
+    // a cada alumno de secundaria para que sus docentes también se evalúen.
+    if (student.grade.includes("secundaria") && electiveStreams.length) {
+      const stream = electiveStreams[student.id % electiveStreams.length];
+      assigned.push(...electiveCatalog
+        .filter((teacher) => teacher.stream === stream)
+        .map((teacher) => ({ ...teacher, grade: student.grade, group: student.group })));
+    }
     for (const teacher of assigned) {
       const quality = teacherQuality.get(teacher.code) ?? 2.4;
       for (const question of teacherQuestions) {
@@ -302,7 +311,7 @@ export const aggregate = (dataset: Dataset, filters: Filters) => {
     (byTeacherQuestion.get(key) ?? byTeacherQuestion.set(key, []).get(key)!).push(row.value);
   }
 
-  const teacherByCode = new Map(teacherCatalog.map((teacher) => [teacher.code, teacher]));
+  const teacherByCode = new Map([...teacherCatalog, ...electiveCatalog].map((teacher) => [teacher.code, teacher]));
   const teachers = [...byTeacher.entries()]
     .map(([code, values]) => {
       const teacher = teacherByCode.get(code) as TeacherAssignment;

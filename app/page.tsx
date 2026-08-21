@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { teacherCatalog } from "./teacher-catalog";
+import { teacherCatalog, electiveCatalog, electiveStreams } from "./teacher-catalog";
+import { staffForStudent, staffQuestions, staffAnswerKey, roleLabels, type EvaluatedStaff } from "./staff-catalog";
 import { aggregate, buildDataset, teacherDimensions, teacherQuestions } from "./results-engine";
 
 type Answers = Record<string, string | string[]>;
@@ -262,7 +263,34 @@ export default function Home() {
   const selectedStudentGrade = String(answers.grade || "");
   const selectedStudentGroup = String(answers.group || "");
   const studentGroupOptions = selectedStudentGrade ? catalogGroupsForGrade(selectedStudentGrade) : [];
-  const studentTeachers = teacherCatalog.filter((teacher) => teacher.grade === selectedStudentGrade && teacher.group === selectedStudentGroup);
+  const groupTeachers = teacherCatalog.filter((teacher) => teacher.grade === selectedStudentGrade && teacher.group === selectedStudentGroup);
+
+  /* -----------------------------------------------------------------------
+     Optativa de inglés.
+     Se cursa por nivel y eso cruza los grados, así que no puede deducirse del
+     grupo: el alumno lo indica. Antes estos siete docentes vivían en un grado
+     ficticio llamado "Optativas de secundaria" y seis de ellos no aparecían en
+     ningún grupo real, de modo que nadie llegaba nunca a evaluarlos.
+     ----------------------------------------------------------------------- */
+  const isSecondaryStudent = selectedStudentGrade.includes("secundaria");
+  const selectedEnglishStream = String(answers.english_stream || "");
+  const englishTeachers = electiveCatalog
+    .filter((teacher) => teacher.stream === selectedEnglishStream)
+    .map((teacher) => ({ ...teacher, grade: selectedStudentGrade, group: selectedStudentGroup }));
+  const needsEnglishChoice = isSecondaryStudent && !selectedEnglishStream;
+
+  const studentTeachers = [...groupTeachers, ...englishTeachers];
+
+  /* -----------------------------------------------------------------------
+     Personal evaluable que le corresponde a este alumno: el de alcance escolar
+     más el de su propio grupo, como la tutoría. Antes cada persona estaba
+     escrita dentro del formulario, así que sólo podía haber una por área.
+     ----------------------------------------------------------------------- */
+  const studentStaff = staffForStudent(selectedStudentGrade, selectedStudentGroup);
+  const staffAnsweredCount = (person: EvaluatedStaff) =>
+    staffQuestions[person.role].filter((question) => Boolean(answers[staffAnswerKey(person.code, question.id)])).length;
+  const staffIsComplete = (person: EvaluatedStaff) =>
+    staffAnsweredCount(person) === staffQuestions[person.role].length;
 
   /* -----------------------------------------------------------------------
      Avance real por nivel.
@@ -272,19 +300,20 @@ export default function Home() {
      registrar una sesión vacía que infla la participación sin aportar datos.
      ----------------------------------------------------------------------- */
   const institutionalIds = ["imma_safe", "imma_heard", "imma_help"];
-  const directorIds = [
-    "director_agreements", "director_communication", "director_listens",
-    "director_fair", "director_followup",
-  ];
-  const supportItemsByArea: Record<string, string[]> = {
-    "🧠 Psicología": ["psych_listens", "psych_safe", "psych_useful"],
-    "🩺 Enfermería": ["nurse_care", "nurse_clear", "nurse_followup"],
-    "🤝 Tutoría": ["tutor_listens", "tutor_guidance", "tutor_cares"],
-  };
   const answeredAmong = (ids: string[]) => ids.filter((id) => Boolean(answers[id])).length;
 
+  // El avance de directivos y red de apoyo se cuenta por persona, porque el
+  // número de reactivos depende de a cuántas personas evalúe este alumno.
   const chosenSupport = Array.isArray(answers.support) ? answers.support : [];
-  const supportItemsToAnswer = chosenSupport.flatMap((area) => supportItemsByArea[area] ?? []);
+  const areaLabelFor = (person: EvaluatedStaff) => `${roleLabels[person.role].icon} ${roleLabels[person.role].label}`;
+  const directorStaff = studentStaff.filter((person) => person.role === "directivo");
+  const chosenSupportStaff = studentStaff.filter(
+    (person) => person.role !== "directivo" && chosenSupport.includes(areaLabelFor(person)),
+  );
+  const sumQuestions = (people: EvaluatedStaff[]) =>
+    people.reduce((total, person) => total + staffQuestions[person.role].length, 0);
+  const sumAnswered = (people: EvaluatedStaff[]) =>
+    people.reduce((total, person) => total + staffAnsweredCount(person), 0);
   const teacherItemsTotal = studentTeachers.length * teacherQuestions.length;
   const teacherItemsAnswered = studentTeachers.reduce(
     (total, item) => total + teacherQuestions.filter((question) => Boolean(answers[`teacher_${item.code}_${question.id}`])).length,
@@ -295,18 +324,20 @@ export default function Home() {
     {
       level: 1,
       label: levels[1],
-      answered: (selectedStudentGrade ? 1 : 0) + (selectedStudentGroup ? 1 : 0) + answeredAmong(institutionalIds),
-      total: 2 + institutionalIds.length,
+      answered: (selectedStudentGrade ? 1 : 0) + (selectedStudentGroup ? 1 : 0)
+        + (isSecondaryStudent ? (selectedEnglishStream ? 1 : 0) : 0)
+        + answeredAmong(institutionalIds),
+      total: 2 + (isSecondaryStudent ? 1 : 0) + institutionalIds.length,
     },
     { level: 2, label: levels[2], answered: teacherItemsAnswered, total: teacherItemsTotal },
-    { level: 3, label: levels[3], answered: answeredAmong(directorIds), total: directorIds.length },
+    { level: 3, label: levels[3], answered: sumAnswered(directorStaff), total: sumQuestions(directorStaff) },
     {
       level: 4,
       label: levels[4],
       // Elegir "No he utilizado estos servicios" ya completa el nivel: no hay
       // nada más que responder y obligar a más sería pedir una opinión inventada.
-      answered: chosenSupport.length ? answeredAmong(supportItemsToAnswer) + 1 : 0,
-      total: chosenSupport.length ? supportItemsToAnswer.length + 1 : 1,
+      answered: chosenSupport.length ? sumAnswered(chosenSupportStaff) + 1 : 0,
+      total: chosenSupport.length ? sumQuestions(chosenSupportStaff) + 1 : 1,
     },
     // El nivel 5 son textos abiertos, opcionales por diseño.
     { level: 5, label: levels[5], answered: 1, total: 1, optional: true },
@@ -1275,6 +1306,26 @@ export default function Home() {
             </div>
             {!selectedStudentGrade && <small>Primero selecciona tu grado para ver los grupos disponibles.</small>}
           </div>
+          {/* El nivel de inglés no se deduce del grupo: se cursa por nivel y eso
+              cruza los grados. Sin este paso, sus docentes no llegan a la
+              evaluación de nadie. */}
+          {isSecondaryStudent && (
+            <div className="question-block">
+              <h3>¿En qué nivel de inglés estás?</h3>
+              <p className="instruction">Es la clase de inglés a la que asistes, sin importar tu grupo.</p>
+              <div className="compact-grid">
+                {electiveStreams.map((item) => (
+                  <Choice
+                    key={item}
+                    label={item}
+                    selected={selectedEnglishStream === item}
+                    onClick={() => { setAnswer("english_stream", item); setTeacherIndex(0); }}
+                  />
+                ))}
+              </div>
+              {needsEnglishChoice && <small>Elige tu nivel para incluir a tu maestro de inglés.</small>}
+            </div>
+          )}
           <div className="question-block">
             <h3>Cuando llegas al IMMA, normalmente te sientes…</h3>
             <div className="compact-grid">
@@ -1391,108 +1442,178 @@ export default function Home() {
     }
 
     if (level === 3) {
+      // El equipo directivo puede tener varias personas y cada una se evalúa
+      // por separado. Antes había una sola escrita dentro del formulario, y sus
+      // respuestas se guardaban sin referencia a nadie, de modo que con dos
+      // directivos ambas se habrían sumado en un mismo promedio.
+      const directors = studentStaff.filter((person) => person.role === "directivo");
+      if (!directors.length) {
+        return (
+          <div className="empty-state">
+            <strong>Sin directivos registrados</strong>
+            <p>Aún no hay personal directivo asignado para tu grupo.</p>
+          </div>
+        );
+      }
       return (
         <>
           <div className="section-heading">
             <span className="level-icon">🧭</span>
-            <div><p>NIVEL 3</p><h2>Quienes dirigen el IMMA</h2></div>
-          </div>
-          <div className="person-card">
-            <div className="avatar purple">LR</div>
-            <div className="person-copy"><span className="tag purple-tag">DIRECTIVO</span><h2>Lic. Luis Rodríguez</h2><p>Coordinación académica</p></div>
-            <span className="card-status">Tarjeta individual</span>
+            <div>
+              <p>NIVEL 3 · {directors.length} {directors.length === 1 ? "PERSONA" : "PERSONAS"}</p>
+              <h2>Quienes dirigen el IMMA</h2>
+            </div>
           </div>
           <div className="director-evaluation-intro">
-            <div><span>EVALUACIÓN DIRECTIVA</span><h3>Tu experiencia con quienes dirigen IMMA</h3><p>Piensa en situaciones que hayas vivido y selecciona la opción que mejor represente tu experiencia.</p></div>
-            <b>5 preguntas</b>
+            <div>
+              <span>EVALUACIÓN DIRECTIVA</span>
+              <h3>Tu experiencia con quienes dirigen IMMA</h3>
+              <p>Piensa en situaciones que hayas vivido y selecciona la opción que mejor represente tu experiencia.</p>
+            </div>
+            <b>{staffQuestions.directivo.length} preguntas</b>
           </div>
-          <div className="director-questions">
-            <ScaleQuestion id="director_agreements" text="Cumple los acuerdos y organiza bien las actividades de la escuela." dimension="Organización y cumplimiento" answers={answers} setAnswer={setAnswer} />
-            <ScaleQuestion id="director_communication" text="Explica con claridad las decisiones, reglas y cambios importantes." dimension="Comunicación" answers={answers} setAnswer={setAnswer} />
-            <ScaleQuestion id="director_listens" text="Escucha a los estudiantes y toma en cuenta lo que pensamos." dimension="Escucha estudiantil" answers={answers} setAnswer={setAnswer} />
-            <ScaleQuestion id="director_fair" text="Nos trata con respeto y busca soluciones justas." dimension="Respeto y trato justo" answers={answers} setAnswer={setAnswer} />
-            <ScaleQuestion id="director_followup" text="Da seguimiento a los problemas hasta que se resuelven." dimension="Seguimiento" answers={answers} setAnswer={setAnswer} />
-          </div>
+          {directors.map((person) => (
+            <div key={person.code} className="staff-block">
+              <div className="person-card">
+                <div className="avatar purple">{person.initials}</div>
+                <div className="person-copy">
+                  <span className="tag purple-tag">DIRECTIVO</span>
+                  <h2>{person.name}</h2>
+                  <p>{person.title}</p>
+                </div>
+                <span className={`card-status ${staffIsComplete(person) ? "complete-status" : ""}`}>
+                  {staffIsComplete(person) ? "Evaluado ✓" : `${staffAnsweredCount(person)} de ${staffQuestions[person.role].length}`}
+                </span>
+              </div>
+              <div className="director-questions">
+                {staffQuestions.directivo.map((question) => (
+                  <ScaleQuestion
+                    key={question.id}
+                    id={staffAnswerKey(person.code, question.id)}
+                    text={question.text}
+                    dimension={question.dimension}
+                    answers={answers}
+                    setAnswer={setAnswer}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
           <div className="question-block director-comment-block">
             <h3>💬 ¿Qué podrían hacer mejor quienes dirigen IMMA?</h3>
-            <textarea maxLength={500} placeholder="Tu comentario es opcional" value={String(answers.director_comment || "")} onChange={(e) => setAnswer("director_comment", e.target.value)} />
+            <textarea
+              maxLength={500}
+              placeholder="Tu comentario es opcional"
+              value={String(answers.director_comment || "")}
+              onChange={(e) => setAnswer("director_comment", e.target.value)}
+            />
             <small>{String(answers.director_comment || "").length}/500 · Evita incluir nombres o datos personales.</small>
           </div>
         </>
       );
     }
 
+
     if (level === 4) {
-      const selectedSupport = Array.isArray(answers.support) ? answers.support : [];
+      // Cada área de apoyo es una o varias personas, y la tutoría corresponde al
+      // grupo del alumno. Antes las tres estaban escritas en el formulario y la
+      // tutora era siempre la misma sin importar el grupo.
+      const supportRoles = ["psicologia", "enfermeria", "tutoria"] as const;
+      const availableAreas = supportRoles.filter((role) =>
+        studentStaff.some((person) => person.role === role),
+      );
+      const noneLabel = "No he utilizado estos servicios";
+      const chosen = Array.isArray(answers.support) ? answers.support : [];
+
+      const toggleArea = (option: string) => {
+        const current = Array.isArray(answers.support) ? answers.support : [];
+        const isSelected = current.includes(option);
+        if (option === noneLabel) {
+          setAnswer("support", isSelected ? [] : [noneLabel]);
+          return;
+        }
+        const withoutNone = current.filter((item) => item !== noneLabel);
+        setAnswer(
+          "support",
+          isSelected ? withoutNone.filter((item) => item !== option) : [...withoutNone, option],
+        );
+      };
+
       return (
         <>
           <div className="section-heading">
             <span className="level-icon">🤝</span>
-            <div><p>NIVEL 4</p><h2>Tu red de apoyo IMMA</h2></div>
+            <div><p>NIVEL 4</p><h2>Tu red de apoyo</h2></div>
+          </div>
+          <div className="privacy-note">
+            🔒 Evalúa únicamente las áreas con las que hayas tenido contacto. Dejar una fuera no afecta tu participación.
           </div>
           <div className="question-block">
             <h3>¿Con cuáles de estas áreas has tenido contacto?</h3>
             <div className="compact-grid">
-              {["🧠 Psicología", "🩺 Enfermería", "🤝 Tutoría", "No he utilizado estos servicios"].map((item) => {
-                const selected = Array.isArray(answers.support) && answers.support.includes(item);
-                return <Choice key={item} label={item} selected={selected} onClick={() => {
-                  const current = Array.isArray(answers.support) ? answers.support : [];
-                  if (item === "No he utilizado estos servicios") {
-                    setAnswer("support", selected ? [] : [item]);
-                  } else {
-                    const withoutNone = current.filter((x) => x !== "No he utilizado estos servicios");
-                    setAnswer("support", selected ? withoutNone.filter((x) => x !== item) : [...withoutNone, item]);
-                  }
-                }} />;
+              {availableAreas.map((role) => {
+                const option = `${roleLabels[role].icon} ${roleLabels[role].label}`;
+                return (
+                  <Choice
+                    key={role}
+                    label={option}
+                    selected={chosen.includes(option)}
+                    onClick={() => toggleArea(option)}
+                  />
+                );
               })}
+              <Choice
+                label={noneLabel}
+                selected={chosen.includes(noneLabel)}
+                onClick={() => toggleArea(noneLabel)}
+              />
             </div>
           </div>
-          {selectedSupport.includes("🧠 Psicología") && (
-            <div className="support-evaluation">
-                <div className="person-card psychology-card">
-                  <div className="avatar sunflower">EV</div>
-                  <div className="person-copy"><span className="tag gold-tag">PSICOLOGÍA</span><h2>Lic. Elena Vargas</h2><p>Psicología y orientación IMMA</p></div>
-                  <span className="support-question-count">3 preguntas</span>
+
+          {availableAreas.map((role) => {
+            const option = `${roleLabels[role].icon} ${roleLabels[role].label}`;
+            if (!chosen.includes(option)) return null;
+            const people = studentStaff.filter((person) => person.role === role);
+            return people.map((person) => (
+              <div key={person.code} className="support-evaluation">
+                <div className="person-card">
+                  <div className="avatar sunflower">{person.initials}</div>
+                  <div className="person-copy">
+                    <span className="tag gold-tag">{roleLabels[role].label.toUpperCase()}</span>
+                    <h2>{person.name}</h2>
+                    <p>{person.title}{person.scope === "grupo" ? ` · ${person.group}` : ""}</p>
+                  </div>
+                  <span className="support-question-count">
+                    {staffQuestions[role].length} preguntas
+                  </span>
                 </div>
-              <ScaleQuestion id="psych_listens" text="Me escuchó con atención y sin juzgarme." answers={answers} setAnswer={setAnswer} />
-              <ScaleQuestion id="psych_safe" text="Me hizo sentir en confianza para hablar de lo que me preocupaba." answers={answers} setAnswer={setAnswer} />
-              <ScaleQuestion id="psych_useful" text="Su orientación me ayudó a saber qué podía hacer después." answers={answers} setAnswer={setAnswer} />
-            </div>
-          )}
-          {selectedSupport.includes("🩺 Enfermería") && (
-            <div className="support-evaluation">
-                <div className="person-card nurse-card">
-                  <div className="avatar light-blue">AS</div>
-                  <div className="person-copy"><span className="tag">ENFERMERÍA</span><h2>Enf. Ana Sánchez</h2><p>Servicio de Enfermería IMMA</p></div>
-                  <span className="support-question-count">3 preguntas</span>
-                </div>
-              <ScaleQuestion id="nurse_care" text="Me atendió con amabilidad y tomó en serio lo que sentía." answers={answers} setAnswer={setAnswer} />
-              <ScaleQuestion id="nurse_clear" text="Me explicó claramente qué debía hacer." answers={answers} setAnswer={setAnswer} />
-              <ScaleQuestion id="nurse_followup" text="Me indicó cuándo debía regresar o pedir más ayuda." answers={answers} setAnswer={setAnswer} />
-            </div>
-          )}
-          {selectedSupport.includes("🤝 Tutoría") && (
-            <div className="support-evaluation">
-                <div className="person-card support-card">
-                  <div className="avatar sunflower">ML</div>
-                  <div className="person-copy"><span className="tag gold-tag">TUTORÍA</span><h2>Lic. Mariana López</h2><p>Tutora de acompañamiento · Grupo A</p></div>
-                  <span className="support-question-count">3 preguntas</span>
-                </div>
-              <ScaleQuestion id="tutor_listens" text="Me escucha cuando tengo una dificultad." answers={answers} setAnswer={setAnswer} />
-              <ScaleQuestion id="tutor_guidance" text="Me ayuda a encontrar una solución o el apoyo que necesito." answers={answers} setAnswer={setAnswer} />
-              <ScaleQuestion id="tutor_cares" text="Se interesa por cómo estamos, no solo por las calificaciones." answers={answers} setAnswer={setAnswer} />
-            </div>
-          )}
-          {selectedSupport.length === 0 && <div className="empty-support">Selecciona un área para ver cómo se presentará su evaluación.</div>}
-          {selectedSupport.includes("No he utilizado estos servicios") && <div className="empty-support support-none-note">Gracias por indicarlo. Puedes continuar; estas preguntas no se mostrarán porque todavía no has utilizado los servicios.</div>}
+                {staffQuestions[role].map((question) => (
+                  <ScaleQuestion
+                    key={question.id}
+                    id={staffAnswerKey(person.code, question.id)}
+                    text={question.text}
+                    answers={answers}
+                    setAnswer={setAnswer}
+                  />
+                ))}
+              </div>
+            ));
+          })}
+
           <div className="question-block">
-            <h3>💬 ¿Qué podría mejorar el IMMA en sus servicios de apoyo?</h3>
-            <textarea maxLength={500} placeholder="Tu comentario es opcional" value={String(answers.support_comment || "")} onChange={(e) => setAnswer("support_comment", e.target.value)} />
+            <h3>💬 ¿Cómo podría mejorar la red de apoyo del IMMA?</h3>
+            <textarea
+              maxLength={500}
+              placeholder="Tu comentario es opcional"
+              value={String(answers.support_comment || "")}
+              onChange={(e) => setAnswer("support_comment", e.target.value)}
+            />
             <small>{String(answers.support_comment || "").length}/500 · Evita incluir nombres o datos personales.</small>
           </div>
         </>
       );
     }
+
 
     if (level === 5) {
       return (
@@ -1666,7 +1787,7 @@ export default function Home() {
             {level > 0 && level < levels.length - 1 && (
               <div className="navigation">
                 <button className="secondary" onClick={back}>← Regresar</button>
-                <button className="primary" onClick={next} disabled={level === 1 && (!selectedStudentGrade || !selectedStudentGroup || studentTeachers.length === 0)}>Continuar →</button>
+                <button className="primary" onClick={next} disabled={level === 1 && (!selectedStudentGrade || !selectedStudentGroup || needsEnglishChoice || studentTeachers.length === 0)}>Continuar →</button>
               </div>
             )}
             {level === levels.length - 1 && <button className="secondary bottom-back" onClick={back}>← Revisar respuestas</button>}

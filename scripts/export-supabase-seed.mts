@@ -10,7 +10,8 @@
  */
 
 import { writeFileSync, mkdirSync } from "node:fs";
-import { teacherCatalog } from "../app/teacher-catalog.ts";
+import { teacherCatalog, electiveCatalog } from "../app/teacher-catalog.ts";
+import { staffCatalog } from "../app/staff-catalog.ts";
 import {
   institutionalQuestions,
   supportAreas,
@@ -24,6 +25,15 @@ mkdirSync(OUT, { recursive: true });
 
 /** Comillas simples de SQL: se duplican las internas. */
 const q = (value: string | null) => (value === null ? "NULL" : `'${value.replace(/'/g, "''")}'`);
+
+/** Código estable de una persona a partir de su nombre. */
+const slug = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 
 /* --------------------------------------------------------------------------
    Instrumento
@@ -166,5 +176,67 @@ on conflict (teacher_id, cycle_id, subject, grade, group_name) do nothing;
 
 writeFileSync(`${OUT}/teachers.sql`, teachersSql);
 
+/* --------------------------------------------------------------------------
+   Optativas de inglés
+   No pertenecen a un grupo: el alumno indica qué nivel cursa.
+   -------------------------------------------------------------------------- */
+const electivePeople = new Map<string, { code: string; name: string; initials: string }>();
+for (const item of electiveCatalog) {
+  const personCode = slug(item.name);
+  if (!electivePeople.has(personCode)) {
+    electivePeople.set(personCode, { code: personCode, name: item.name, initials: item.initials });
+  }
+}
+
+const electivesSql = `-- Generado por scripts/export-supabase-seed.mts · NO editar a mano.
+-- Fuente: app/teacher-catalog.ts (electiveCatalog)
+-- ${electivePeople.size} docentes · ${electiveCatalog.length} niveles de inglés
+
+insert into teachers (code, full_name, initials) values
+${[...electivePeople.values()]
+  .map((person) => `  (${q(person.code)}, ${q(person.name)}, ${q(person.initials)})`)
+  .join(",\n")}
+on conflict (code) do update set full_name = excluded.full_name, initials = excluded.initials;
+
+insert into teaching_assignments (teacher_id, cycle_id, subject, school_level, elective_stream)
+select t.id, ${q(CYCLE_ID)}, v.subject, v.school_level, v.stream
+from (values
+${electiveCatalog
+  .map((item) => `  (${q(slug(item.name))}, ${q(item.subject)}, ${q(item.level)}, ${q(item.stream)})`)
+  .join(",\n")}
+) as v(teacher_code, subject, school_level, stream)
+join teachers t on t.code = v.teacher_code;
+`;
+
+writeFileSync(`${OUT}/electives.sql`, electivesSql);
+
+/* --------------------------------------------------------------------------
+   Personal evaluable
+   -------------------------------------------------------------------------- */
+const staffSql = `-- Generado por scripts/export-supabase-seed.mts · NO editar a mano.
+-- Fuente: app/staff-catalog.ts
+-- ${staffCatalog.length} personas. Sustituir por el personal real del ciclo.
+
+insert into evaluated_staff (code, full_name, initials, title, role, scope, grade, group_name) values
+${staffCatalog
+  .map(
+    (person) =>
+      `  (${q(person.code)}, ${q(person.name)}, ${q(person.initials)}, ${q(person.title)}, ${q(person.role)}, ${q(person.scope)}, ${q(person.grade ?? null)}, ${q(person.group ?? null)})`,
+  )
+  .join(",\n")}
+on conflict (code) do update set
+  full_name = excluded.full_name,
+  initials = excluded.initials,
+  title = excluded.title,
+  role = excluded.role,
+  scope = excluded.scope,
+  grade = excluded.grade,
+  group_name = excluded.group_name;
+`;
+
+writeFileSync(`${OUT}/staff.sql`, staffSql);
+
 console.log(`instrument.sql  → ${items.length} reactivos`);
 console.log(`teachers.sql    → ${people.size} docentes, ${teacherCatalog.length} asignaciones`);
+console.log(`electives.sql   → ${electivePeople.size} docentes, ${electiveCatalog.length} niveles de inglés`);
+console.log(`staff.sql       → ${staffCatalog.length} personas del equipo directivo y de apoyo`);

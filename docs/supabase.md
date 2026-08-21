@@ -26,8 +26,11 @@ supabase/migrations/0003_views.sql       Agregados con umbral mínimo
 supabase/migrations/0004_rls.sql         Políticas de acceso
 supabase/migrations/0005_integrity.sql   Disparadores de validación
 supabase/migrations/0006_tokens.sql      Fichas de participación
+supabase/migrations/0007_evaluated_staff.sql  Personal evaluable y optativas
 supabase/seed/instrument.sql             32 reactivos
-supabase/seed/teachers.sql               23 docentes · 102 asignaciones
+supabase/seed/teachers.sql               18 docentes · 95 asignaciones
+supabase/seed/electives.sql              6 docentes · 7 niveles de inglés
+supabase/seed/staff.sql                  Equipo directivo y red de apoyo
 ```
 
 Desde el editor SQL del panel de Supabase, pegando cada archivo en orden. O por

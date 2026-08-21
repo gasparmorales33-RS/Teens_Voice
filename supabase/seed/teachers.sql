@@ -1,6 +1,6 @@
 -- Generado por scripts/export-supabase-seed.mts · NO editar a mano.
 -- Fuente: app/teacher-catalog.ts
--- 23 docentes · 102 asignaciones
+-- 18 docentes · 95 asignaciones
 
 insert into teachers (code, full_name, initials) values
   ('brenda-elicet-giles-miranda', 'Brenda Elicet Giles Miranda', 'BE'),
@@ -20,12 +20,7 @@ insert into teachers (code, full_name, initials) values
   ('santiago-garate-martinez', 'Santiago Garate Martinez', 'SG'),
   ('perla-guadalupe-morales-partida', 'Perla Guadalupe Morales Partida', 'PG'),
   ('karime-sinahi-pena-huerta', 'Karime Sinahí Peña Huerta', 'KS'),
-  ('teresita-de-jesus-ruiz-castaneda', 'Teresita De Jesús Ruiz Castañeda', 'TD'),
-  ('norma-carolina-lizarraga-osuna', 'Norma Carolina Lizarraga Osuna', 'NC'),
-  ('elizabeth-gaxiola-tirado', 'Elizabeth Gaxiola Tirado', 'EG'),
-  ('beatriz-gutierrez-duran', 'Beatriz Gutierrez Duran', 'BG'),
-  ('marielisa-osuna-ramirez', 'Marielisa Osuna Ramirez', 'MO'),
-  ('ana-isabel-laris-cutino', 'Ana Isabel Laris Cutiño', 'AI')
+  ('teresita-de-jesus-ruiz-castaneda', 'Teresita De Jesús Ruiz Castañeda', 'TD')
 on conflict (code) do update set full_name = excluded.full_name, initials = excluded.initials;
 
 insert into teaching_assignments (teacher_id, cycle_id, subject, school_level, grade, group_name)
@@ -125,14 +120,7 @@ from (values
   ('elias-marcelo-tejeda-aguirre', 'Matemáticas Iii', 'Secundaria', '3.º de secundaria', 'Grupo C'),
   ('jesus-fabian-arellano-ornelas', 'Taller De Artes', 'Secundaria', '3.º de secundaria', 'Grupo C'),
   ('santiago-garate-martinez', 'Tecnología', 'Secundaria', '3.º de secundaria', 'Grupo C'),
-  ('perla-guadalupe-morales-partida', 'Tutoria', 'Secundaria', '3.º de secundaria', 'Grupo C'),
-  ('norma-carolina-lizarraga-osuna', 'Advance English 1', 'Secundaria', 'Optativas de secundaria', 'Ingles'),
-  ('elizabeth-gaxiola-tirado', 'Advance English 2', 'Secundaria', 'Optativas de secundaria', 'Ingles'),
-  ('elizabeth-gaxiola-tirado', 'Advanced 1b', 'Secundaria', 'Optativas de secundaria', 'Ingles'),
-  ('beatriz-gutierrez-duran', 'Basic English 1', 'Secundaria', 'Optativas de secundaria', 'Ingles'),
-  ('marielisa-osuna-ramirez', 'Basic English 2', 'Secundaria', 'Optativas de secundaria', 'Ingles'),
-  ('ana-isabel-laris-cutino', 'Middle English 1', 'Secundaria', 'Optativas de secundaria', 'Ingles'),
-  ('sheccid-tirado-cuellar', 'Middle English 2', 'Secundaria', 'Optativas de secundaria', 'Ingles')
+  ('perla-guadalupe-morales-partida', 'Tutoria', 'Secundaria', '3.º de secundaria', 'Grupo C')
 ) as v(teacher_code, subject, school_level, grade, group_name)
 join teachers t on t.code = v.teacher_code
 on conflict (teacher_id, cycle_id, subject, grade, group_name) do nothing;
